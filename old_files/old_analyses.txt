@@ -1,0 +1,239 @@
+```{r kmeans_joint_all_traj}
+# Try clustering using all trajectories jointly
+df_all_clust_trajs <-
+  df_all_clust %>% select("INIT",
+                          paste0(boscc_scores,
+                                 "_est_traj_normalized")) %>%
+  distinct()
+
+clus_joint <- list()
+clus_total_within_ss <- list("clusters"=NA, "critierion"=list())
+
+for(j in 1:8){
+  set.seed(123)
+  clus_joint[[j]] <-
+  kmeans(x=df_all_clust_trajs%>%
+           select(-INIT),
+              centers=j, nstart=10)
+  clus_total_within_ss$clusters[j] <- j
+  clus_total_within_ss$critierion[[j]] <- kmeansAICBIC(clus_joint[[j]])
+}
+
+clus_total_all_criterion <- do.call("rbind", clus_total_within_ss$critierion)
+clus_total_all_df <-
+  data.frame("cluster_no"=clus_total_within_ss$clusters,
+             clus_total_all_criterion)
+
+# Plot BIC of joint clusters
+ggplot(data=clus_total_all_df, mapping=aes(x=cluster_no, y=BIC))+
+  geom_point()+
+  geom_path()+
+  theme_bw()+
+  xlab("Number of Clusters")+
+  labs(title="Cluster fit index using BIC for joint BOSCC analysis")
+
+ggsave("plots_tables/joint_boscc_kmean_cluster_bic.jpg",
+       scale=2.5, limitsize = FALSE)
+
+# Save clusters from best BIC
+clus_lowest_bic <-
+  which(clus_total_all_df$BIC==min(clus_total_all_df$BIC))
+
+clus_best <- clus_joint[[clus_lowest_bic]]
+
+df_all_clust_trajs <- data.frame(df_all_clust_trajs,
+                               "cluster"=factor(clus_best$cluster))
+df_all_clust_trajs <- inner_join(Full_Long_iq_all_impute, df_all_clust_trajs)
+
+# Print boxplots of measures
+df_all_clust_trajs_boxplot <-
+  df_all_clust_trajs %>%
+    pivot_longer(cols=paste0(boscc_scores,
+                                   "_est_traj_normalized"),
+                 names_to="boscc_est_type",
+                 values_to="boscc_est_type_est") %>%
+    select(INIT, boscc_est_type, boscc_est_type_est, cluster) %>%
+    mutate(boscc_est_type=factor(boscc_est_type)) %>%
+    distinct() %>%
+    separate(boscc_est_type, into=c("boscc_type", "est_type"),
+             sep="_est_traj") %>%
+    select(-est_type)
+
+ggplot(data=df_all_clust_trajs_boxplot,
+       mapping=aes(y=boscc_est_type_est, x=cluster, fill=cluster))+
+  facet_grid(boscc_type~., scales = "free")+
+  geom_boxplot()+
+  theme_bw()+
+  xlab("Cluster")+
+  ylab("Estimated Normalized Trajectory")+
+  labs(title=paste0("Boxplot of estimated normalized age trajectories\nfor joint BOSCC cluster analysis"),
+       fill="Cluster")
+ggsave("plots_tables/joint_boscc_boxplot_cluster_results.jpg",
+       scale=2.5, limitsize = FALSE)
+```
+
+```{r clust_subscore_pair}
+# Add in clustering analysis of pairs (both SCs, then both RRBs separately
+# SC
+boscc_types <- c("SC", "RRB")
+clus_pair <- list()
+clus_total_within_ss <- list("clusters"=NA, "critierion"=list())
+clus_total_all_df <- list()
+df_joint_clust_trajs <- list()
+
+for(i in 1:length(boscc_types)){
+  type_pair_clustering_data <-
+    df_all_clust_only_plot %>%
+    filter(type==boscc_types[i]) %>%
+    select(INIT, ados_boscc_traj_norm, stand_boscc_traj_norm, type)
+
+  for(j in 1:8){
+    set.seed(123)
+    clus_pair[[j]] <-
+    kmeans(x=type_pair_clustering_data%>%
+             select(-INIT, -type),
+                centers=j, nstart=10)
+    clus_total_within_ss$clusters[j] <- j
+    clus_total_within_ss$critierion[[j]] <- kmeansAICBIC(clus_pair[[j]])
+  }
+  clus_total_all_criterion <- do.call("rbind", clus_total_within_ss$critierion)
+  clus_total_all_df[[i]] <-
+  data.frame("cluster_no"=clus_total_within_ss$clusters,
+             clus_total_all_criterion,
+             "type"=boscc_types[i])
+  names(clus_total_all_df)[i] <- boscc_types[i]
+
+  # Calc. clusters from lowest BIC
+  clus_lowest_bic <-
+  which(clus_total_all_df[[i]]$BIC==min(clus_total_all_df[[i]]$BIC))
+
+  clus_best <- clus_pair[[clus_lowest_bic]]
+
+  df_joint_clust_trajs[[i]] <- data.frame(type_pair_clustering_data,
+                               "cluster"=factor(clus_best$cluster))
+  df_joint_clust_trajs[[i]] <-
+    inner_join(Full_Long_iq_all_impute, df_joint_clust_trajs[[i]])
+}
+
+# Plot BIC of pair clusters
+ggplot(data=do.call("rbind", clus_total_all_df),
+       mapping=aes(x=cluster_no, y=BIC))+
+  geom_point()+
+  geom_path()+
+  facet_grid(type~.)+
+  theme_bw()+
+  xlab("Number of Clusters")+
+  labs(title="Cluster fit index using BIC for pair BOSCC analysis")+
+  scale_color_manual(values=c("#00BA38", "#619CFF", "#F8766D"))
+ggsave("plots_tables/pair_boscc_kmean_cluster_bic.jpg",
+       scale=2.5, limitsize = FALSE)
+
+df_joint_clust_trajs_all <- do.call("rbind", df_joint_clust_trajs) %>%
+  arrange(INIT, age)
+
+# Scatterplot of ADOS, standard BOSCC subscores with cluster coloring
+ggplot(data=df_joint_clust_trajs_all %>%
+  select(INIT, ados_boscc_traj_norm, stand_boscc_traj_norm, type, cluster) %>%
+  distinct(),
+  mapping=aes(x=ados_boscc_traj_norm, y=stand_boscc_traj_norm,
+              color=cluster))+
+  geom_point()+
+  facet_grid(type~.)+
+  theme_bw()
+ggsave("plots_tables/pair_boscc_clusters_scatterplot.jpg",
+       scale=2.5, limitsize = FALSE)
+```
+
+```{r individ_cluster_pairing_subscores}
+# We focus on within-subscore comparisons from the separate score cluserting (within RRB and SC)
+# First, just computing frequency table of both clusters
+cluster_var_names <- names(df_all_clust)[grepl("cluster", names(df_all_clust))]
+df_all_clust_only <- df_all_clust %>%
+  select(c("INIT", cluster_var_names)) %>%
+  distinct()
+
+# RRB
+round(ftable(df_all_clust_only$AB_Code2RRBAvgTot_cluster,
+       df_all_clust_only$Code2RRBAvgTot_cluster)/dim(df_all_clust_only)[1],2)
+# SC
+round(ftable(df_all_clust_only$AB_Code2SCAvgTot_cluster,
+       df_all_clust_only$Code2SCAvgTot_cluster)/dim(df_all_clust_only)[1],2)
+
+# Now, scatterplot of ADOS and standard BOSCC trajectories colored by cluster pairings
+traj_var_names <- names(df_all_clust)[grepl("traj_norm", names(df_all_clust))]
+df_all_clust_only <- df_all_clust %>%
+  select(c("INIT", cluster_var_names, traj_var_names)) %>%
+  distinct()
+
+df_all_clust_only_plot_sc <-
+  df_all_clust_only %>%
+  select(-names(df_all_clust_only)[grepl("RRB",names(df_all_clust_only))]) %>%
+  mutate(type="SC") %>%
+  plyr::rename(replace =
+                 c("AB_Code2SCAvgTot_est_traj_normalized"="ados_boscc_traj_norm",
+                   "Code2SCAvgTot_est_traj_normalized"="stand_boscc_traj_norm",
+                   "AB_Code2SCAvgTot_cluster"="ados_boscc_cluster",
+                   "Code2SCAvgTot_cluster"="stand_boscc_cluster"))
+
+df_all_clust_only_plot_rrb <-
+  df_all_clust_only %>%
+    select(-names(df_all_clust_only)[grepl("SC",names(df_all_clust_only))]) %>%
+  mutate(type="RRB") %>%
+  plyr::rename(replace =
+                 c("AB_Code2RRBAvgTot_est_traj_normalized"="ados_boscc_traj_norm",
+                   "Code2RRBAvgTot_est_traj_normalized"="stand_boscc_traj_norm",
+               "AB_Code2RRBAvgTot_cluster"="ados_boscc_cluster",
+                   "Code2RRBAvgTot_cluster"="stand_boscc_cluster"))
+
+df_all_clust_only_plot <-
+  data.frame(rbind(df_all_clust_only_plot_sc, df_all_clust_only_plot_rrb)) %>%
+  arrange(INIT) %>%
+  mutate(cluster_pair=
+           factor(paste0(ados_boscc_cluster,"_",stand_boscc_cluster)))
+
+ggplot(data=df_all_clust_only_plot,
+       mapping=aes(x=ados_boscc_traj_norm, y=stand_boscc_traj_norm,
+                   color=cluster_pair)) +
+  geom_point() +
+  facet_grid(type~.) +
+  theme_bw()
+
+```
+
+```{r compare_clus_dist_traits}
+# Compare baseline characteristics
+# NOTE: For pair cluster analysis, look at df_joint_clust_trajs_all dataset
+df_all_clust_only_plot_merge <-
+  inner_join(Full_Long_iq_all_impute, df_all_clust_only_plot)
+
+# Doing based on pair clustering analysis
+# First look at characteristics for SC
+pair_cluster_summ_stats <-
+  df_joint_clust_trajs_all %>%
+  group_by(type, cluster) %>%
+  summarise(mean_viq=mean(MRVIQ, na.rm=TRUE),
+            sd_viq=sd(MRVIQ, na.rm=TRUE),
+            n_viq=sum(is.na(MRVIQ)==0),
+            mean_nviq=mean(MRNVIQ, na.rm=TRUE),
+            sd_nviq=sd(MRNVIQ, na.rm=TRUE),
+            n_nviq=sum(is.na(MRNVIQ)==0),
+            percent_gender=sum(Gender==1)/n())
+
+# Plot IQ results
+ggplot(data=df_joint_clust_trajs_all%>%
+         pivot_longer(cols=c("MRVIQ","MRNVIQ"),
+                             names_to="iq_type",
+                             values_to="iq_value"),
+       mapping=aes(x=cluster, y=iq_value))+
+  facet_grid(iq_type~type, scales="free_x")+
+  geom_boxplot()
+
+ggplot(data=df_joint_clust_trajs_all%>%
+         pivot_longer(cols=c("MRVIQ","MRNVIQ"),
+                             names_to="iq_type",
+                             values_to="iq_value"),
+       mapping=aes(x=cluster, y=iq_value))+
+  facet_grid(iq_type~type, scales="free_x")+
+  geom_violin(draw_quantiles=0.5)
+
+```
