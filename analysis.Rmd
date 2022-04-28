@@ -1,0 +1,1867 @@
+---
+title: "BOSCC Generalizability"
+author: "Rebecca Grzadzinski"
+output:
+  html_document: default
+---
+# BACKGROUND
+The Brief Observation of Social Communication Change (BOSCC) is a coding scheme of ASD symptoms that is used as a treatment response measure. The BOSCC coding scheme has been validated in a study of toddlers who participated in early interventions (n=56) over the course of about 6 months (Grzadzinski et al., 2016). In this work, the coding scheme was applied to 10-minute videos of parent-child free-play sessions (Standard BOSCC). Subsequent work aimed to validate the coding scheme when applied to segments of video-tapes ADOS administrations (a standardized interaction with a clinician; ADOS-BOSCC; Kim, Martinez, Grzadzinski, & Lord, 2019). This work confirmed the utility of the BOSCC as a treatment outcome measure when applied to parent-child and clinician-child interactions. Even though both of these projects used an overlapping sample of children participating in early intervention trials, we do not know whether the children who show change over time on the Standard BOSCC are the same as those that show change on the ADOS-BOSCC. In addition, we do not know if there are baseline child characteristics that predict whether more change will be observed on the Standard BOSCC vs. ADOS-BOSCC.
+
+# OBJECTIVES: 
+
+1. To evaluate whether children who show improvements on the Standard BOSCC are the same as the children who show improvements on the ADOS-BOSCC.
+
+2. To determine whether there are baseline child characteristics (e.g., NVIQ, VIQ, Age) that predict more improvement on the Standard BOSCC vs. the ADOS-BOSCC. 
+
+## INFORMATION ON THIS DATASET
+
+N=49 toddlers (mean age = 25 months; range 16-54 months) seen between 2 and 5 times with Standard BOSCC and ADOS BOSCC observations. Standard BOSCC and ADOS-BOSCC were done within a few days (mean=3 days; range=0-49 days). 
+
+10 toddlers seen at 2 time points.
+32 toddlers seen at 3 time points.
+5 toddlers seen at 4 time points.
+2 toddlers seen at 5 time points.
+
+(39 toddlers with 3+ time points of data).
+
+## Data Cleaning
+
+````{r intro}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(gridExtra)
+library(ggpubr)
+library(nlme)
+library(lcmm)
+library(naniar)
+library(kableExtra)
+library(broom)
+library(pander)
+library(flextable)
+library(officer)
+library(ggpattern)
+library(psych)
+
+Full_Long<- read_csv("Data/Original_Full_Long_forR.csv") %>%
+  mutate(MELTSC=ifelse(MELTSC==666, NA, MELTSC),
+         MRLTSC=ifelse(MRLTSC==666, NA, MRLTSC))
+FL_Long<- read_csv("Data/FL_Long_forR.csv")
+FL_Wide<- read_csv("Data/FL_Wide_forR2.csv")
+
+Full_Long_SAS <- data.frame(lapply(Full_Long, function(x){ifelse(is.na(x)==1|x=="N/A","",x)}))
+write.csv(x=Full_Long_SAS, file="Data/Full_Long_SAS.csv")
+````
+
+## OBJECTIVE 1:
+
+Correlations at single time points *n=49 kids seen for 146 observations; full long dataset*
+
+*Take-Away: At any single time point, there is a significant correlation between Standard BOSCC and ADOS BOSCC SC and RRB scores*
+
+````{r corss_sec_cors}
+ggplot(Full_Long, aes(x = Code2SCAvgTot, y = AB_Code2SCAvgTot)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs (x = "Standard BOSCC", y = "ADOS BOSCC", title = "Social Communication") +
+  theme_bw()
+
+cor.test(Full_Long$Code2SCAvgTot, Full_Long$AB_Code2SCAvgTot)
+
+ggplot(Full_Long, aes(x = Code2RRBAvgTot, y = AB_Code2RRBAvgTot)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs (x = "Standard BOSCC", y = "ADOS BOSCC", title = "RRB") +
+  theme_bw()
+
+cor.test(Full_Long$Code2RRBAvgTot, Full_Long$AB_Code2RRBAvgTot)
+
+````
+
+Creating change variables 
+
+````{r create_change}
+FL_Wide <- FL_Wide %>% 
+  mutate (ABOSCC_SC_Change = (AB_Code2SCAvgTot.2 - AB_Code2SCAvgTot.1),
+          BOSCC_SC_Change = (Code2SCAvgTot.2 - Code2SCAvgTot.1),
+          BOSCC_RRB_Change = (Code2RRBAvgTot.2 - Code2RRBAvgTot.1),
+          ABOSCC_RRB_Change = (AB_Code2RRBAvgTot.2 - AB_Code2RRBAvgTot.1),
+          BOSCC_Core_Change = (Code2ASDAvgTot.2 - Code2ASDAvgTot.1),
+          ABOSCC_Core_Change = (AB_Code2ASDAvgTot.2 - AB_Code2ASDAvgTot.1),
+          BOSCC_Overall_Change = (Code2OverallAvgTot.2 - Code2OverallAvgTot.1),
+          ABOSCC_Overall_Change = (AB_Code2OverallAvgTot.2 - AB_Code2OverallAvgTot.1))
+
+summary(FL_Wide %>%
+          select(ABOSCC_SC_Change, BOSCC_SC_Change, BOSCC_RRB_Change, ABOSCC_RRB_Change,
+                 BOSCC_Core_Change, ABOSCC_Core_Change, BOSCC_Overall_Change, ABOSCC_Overall_Change)
+        )
+
+`````
+
+## Scatter plots of change from first to last
+
+*Take-Away: From first to last observation, there is a significant correlation between Standard BOSCC Change and ADOS BOSCC Change for both SC and RRB.*
+
+```{r scatterplots_change}
+
+ggplot(FL_Wide, aes(x = BOSCC_SC_Change, y = ABOSCC_SC_Change)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs (x = "Standard BOSCC", y = "ADOS BOSCC", title = "Social Communication Change") +
+  theme_bw()
+
+cor.test(FL_Wide$BOSCC_SC_Change, FL_Wide$ABOSCC_SC_Change)
+
+ggplot(FL_Wide, aes(x = BOSCC_RRB_Change, y = ABOSCC_RRB_Change)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs (x = "Standard BOSCC", y = "ADOS BOSCC", title = "RRB Change") +
+  theme_bw()
+
+cor.test(FL_Wide$BOSCC_RRB_Change, FL_Wide$ABOSCC_RRB_Change)
+
+```
+  
+## Plots of BOSCC score by time
+Looking at kids with 3 time points only. 
+
+```{r three_time_pt_scatter}
+Full_Long_CNTS <- Full_Long %>% 
+  group_by(INIT) %>% 
+  summarize(count=n())
+
+ID_3pts <- Full_Long_CNTS$INIT[which(Full_Long_CNTS$count == 3)]
+
+Full_Long_3pts <- Full_Long %>%
+  filter(INIT%in%ID_3pts)
+
+boscc_scores <- c("AB_Code2RRBAvgTot", "AB_Code2SCAvgTot", "Code2SCAvgTot", "Code2RRBAvgTot")
+
+boscc_by_age_plots <- list()
+for(i in 1:length(boscc_scores)){
+boscc_by_age_plots[[i]] <-
+ggplot(data = Full_Long_3pts, 
+       mapping = aes_string(x="age", y=boscc_scores[i], group="INIT")) +
+  geom_point() +
+  geom_line(aes_string(color="INIT")) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+names(boscc_by_age_plots)[i] <- boscc_scores[i]
+}
+
+ggarrange(plotlist = boscc_by_age_plots,
+          labels = boscc_scores)
+
+```
+
+# Modeling
+Now consider modeling these trends between BOSCC and BOSCC-ADOS measures longitudinally using mixed models.  Two modeling analysis are done:
+
+1. Standard BOSCC = outcome, ADOS-BOSCC and age as covariates of interest
+
+2a. Standard BOSCC = outcome, baseline characteristics (NVIQ, VIQ, age) as covariates of interest
+
+2b. Same but ADOS-BOSCC = outcome
+
+These are done to address objectives 1 and 2 respectively.  In each set of mixed models, we include a random intercept and slope for time as the random effects in the model.  Age is used as an index of time.
+
+## Social communication
+```{r soc_mixed_model}
+## Model 1
+# Fit model
+print(paste("Model 1:", "Code2SCAvgTot~AB_Code2SCAvgTot+age+AB_Code2SCAvgTot*age"))
+ctrl <- lmeControl(opt='optim', maxIter=500, msMaxIter = 500)
+strd_v_ados_lme_fit <-
+  lme(Code2SCAvgTot~AB_Code2SCAvgTot+age+AB_Code2SCAvgTot*age, 
+    data=Full_Long,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+# Extract predicted values
+strd_v_ados_lme_data <- 
+    data.frame(getData(strd_v_ados_lme_fit), 
+               "predicted_lme_strd"=predict(strd_v_ados_lme_fit, 
+                                         newdata = getData(strd_v_ados_lme_fit)))
+
+# Extract and format fixed effect results
+coef_table_v0 <- 
+    summary(strd_v_ados_lme_fit)$tTable[,c("Value","Std.Error","DF","p-value")]
+coef_cis <- round(intervals(strd_v_ados_lme_fit,which="fixed")$fixed[,c("lower","upper")],2)
+  
+  
+  coef_table <- cbind(coef_table_v0, coef_cis) %>% 
+    data.frame() %>%
+    rownames_to_column(var="Variable") %>%
+    mutate(CI_95=paste0("(",round(lower,3),", ",round(upper,3),")"),
+           Estimate=round(Value, 3),
+           p_value=ifelse(p.value>=0.001, round(p.value,3),"<0.001")) %>%
+    select(Variable, Estimate, CI_95, DF, p_value)
+  
+  coef_table
+  
+# Print predicted trajectories
+strd_v_ados_lme_data_bytime <- 
+  strd_v_ados_lme_data #%>%
+  #filter(age)
+
+ggplot(data=strd_v_ados_lme_data_bytime, mapping=aes(x=AB_Code2SCAvgTot,
+                                          group=INIT))+
+  geom_point(mapping=aes(y=Code2SCAvgTot))+
+  geom_line(mapping=aes(y=predicted_lme_strd))+
+  labs(y=paste("Fitted Value:", formula.tools::lhs(Code2SCAvgTot~AB_Code2SCAvgTot+age+AB_Code2SCAvgTot*age)), 
+       title="Mixed model fitted values")
+
+## Model 2a
+print(paste("Model 2a:", "Code2SCAvgTot~age+MRNVIQ+MRVIQ"))
+strd_2a_lme_fit <-
+  lme(Code2SCAvgTot~age+MRNVIQ+MRVIQ, 
+    data=Full_Long,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+# Extract and format fixed effect results
+coef_table_v0 <- 
+    summary(strd_2a_lme_fit)$tTable[,c("Value","Std.Error","DF","p-value")]
+coef_cis <- round(intervals(strd_2a_lme_fit,which="fixed")$fixed[,c("lower","upper")],2)
+  
+  coef_table <- cbind(coef_table_v0, coef_cis) %>% 
+    data.frame() %>%
+    rownames_to_column(var="Variable") %>%
+    mutate(CI_95=paste0("(",round(lower,3),", ",round(upper,3),")"),
+           Estimate=round(Value, 3),
+           p_value=ifelse(p.value>=0.001, round(p.value,3),"<0.001")) %>%
+    select(Variable, Estimate, CI_95, DF, p_value)
+  
+  coef_table
+  
+## Model 2b
+print(paste("Model 2b:", "AB_Code2SCAvgTot~age+MRNVIQ+MRVIQ"))
+strd_2b_lme_fit <-
+  lme(AB_Code2SCAvgTot~age+MRNVIQ+MRVIQ, 
+    data=Full_Long,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+# Extract and format fixed effect results
+coef_table_v0 <- 
+    summary(strd_2b_lme_fit)$tTable[,c("Value","Std.Error","DF","p-value")]
+coef_cis <- round(intervals(strd_2b_lme_fit,which="fixed")$fixed[,c("lower","upper")],2)
+  
+  coef_table <- cbind(coef_table_v0, coef_cis) %>% 
+    data.frame() %>%
+    rownames_to_column(var="Variable") %>%
+    mutate(CI_95=paste0("(",round(lower,3),", ",round(upper,3),")"),
+           Estimate=round(Value, 3),
+           p_value=ifelse(p.value>=0.001, round(p.value,3),"<0.001")) %>%
+    select(Variable, Estimate, CI_95, DF, p_value)
+  
+  coef_table
+```
+
+# Repetitive Behaviors
+```{r rrb_mixed_model}
+## Model 1
+# Fit model
+print(paste("Model 1:", "Code2RRBAvgTot~AB_Code2RRBAvgTot+age+AB_Code2RRBAvgTot*age"))
+ctrl <- lmeControl(opt='optim', maxIter=500, msMaxIter = 500)
+strd_v_ados_lme_fit <-
+  lme(Code2RRBAvgTot~AB_Code2RRBAvgTot+age+AB_Code2RRBAvgTot*age, 
+    data=Full_Long,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+# Extract predicted values
+strd_v_ados_lme_data <- 
+    data.frame(getData(strd_v_ados_lme_fit), 
+               "predicted_lme_strd"=predict(strd_v_ados_lme_fit, 
+                                         newdata = getData(strd_v_ados_lme_fit)))
+
+# Extract and format fixed effect results
+coef_table_v0 <- 
+    summary(strd_v_ados_lme_fit)$tTable[,c("Value","Std.Error","DF","p-value")]
+coef_cis <- round(intervals(strd_v_ados_lme_fit,which="fixed")$fixed[,c("lower","upper")],2)
+  
+  
+  coef_table <- cbind(coef_table_v0, coef_cis) %>% 
+    data.frame() %>%
+    rownames_to_column(var="Variable") %>%
+    mutate(CI_95=paste0("(",round(lower,3),", ",round(upper,3),")"),
+           Estimate=round(Value, 3),
+           p_value=ifelse(p.value>=0.001, round(p.value,3),"<0.001")) %>%
+    select(Variable, Estimate, CI_95, DF, p_value)
+  
+  coef_table
+  
+# Print predicted trajectories
+strd_v_ados_lme_data_bytime <- 
+  strd_v_ados_lme_data #%>%
+  #filter(age)
+
+ggplot(data=strd_v_ados_lme_data_bytime, mapping=aes(x=AB_Code2RRBAvgTot,
+                                          group=INIT))+
+  geom_point(mapping=aes(y=Code2RRBAvgTot))+
+  geom_line(mapping=aes(y=predicted_lme_strd))+
+  labs(y=paste("Fitted Value:", formula.tools::lhs(Code2RRBAvgTot~AB_Code2RRBAvgTot+age+AB_Code2RRBAvgTot*age)), 
+       title="Mixed model fitted values")
+
+## Model 2a
+print(paste("Model 2a:", "Code2RRBAvgTot~age+MRNVIQ+MRVIQ"))
+strd_2a_lme_fit <-
+  lme(Code2RRBAvgTot~age+MRNVIQ+MRVIQ, 
+    data=Full_Long,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+# Extract and format fixed effect results
+coef_table_v0 <- 
+    summary(strd_2a_lme_fit)$tTable[,c("Value","Std.Error","DF","p-value")]
+coef_cis <- round(intervals(strd_2a_lme_fit,which="fixed")$fixed[,c("lower","upper")],2)
+  
+  coef_table <- cbind(coef_table_v0, coef_cis) %>% 
+    data.frame() %>%
+    rownames_to_column(var="Variable") %>%
+    mutate(CI_95=paste0("(",round(lower,3),", ",round(upper,3),")"),
+           Estimate=round(Value, 3),
+           p_value=ifelse(p.value>=0.001, round(p.value,3),"<0.001")) %>%
+    select(Variable, Estimate, CI_95, DF, p_value)
+  
+  coef_table
+  
+## Model 2b
+print(paste("Model 2b:", "AB_Code2RRBAvgTot~age+MRNVIQ+MRVIQ"))
+strd_2b_lme_fit <-
+  lme(AB_Code2SCAvgTot~age+MRNVIQ+MRVIQ, 
+    data=Full_Long,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+# Extract and format fixed effect results
+coef_table_v0 <- 
+    summary(strd_2b_lme_fit)$tTable[,c("Value","Std.Error","DF","p-value")]
+coef_cis <- round(intervals(strd_2b_lme_fit,which="fixed")$fixed[,c("lower","upper")],2)
+  
+  coef_table <- cbind(coef_table_v0, coef_cis) %>% 
+    data.frame() %>%
+    rownames_to_column(var="Variable") %>%
+    mutate(CI_95=paste0("(",round(lower,3),", ",round(upper,3),")"),
+           Estimate=round(Value, 3),
+           p_value=ifelse(p.value>=0.001, round(p.value,3),"<0.001")) %>%
+    select(Variable, Estimate, CI_95, DF, p_value)
+  
+  coef_table
+```
+
+# Latent Variable Modeling
+We first consider growth mixture modeling using the SC and RRB BOSCC scores for both types of BOSCC tests.  That is, we consider 4 models, one for each outcome, with the following covariates: age, Verbal IQ and Non-Verbal IQ.  We see look at the class memberships for the infants in each of the 4 models.
+
+## Missingness
+We can see that there is a large amount of observations with missing IQ values at certain time points (and thus are removed from any longitudinal analysis, subjects kept, just obs. removed).  While mixed model methods will still result in unbiased estimates and standard errors (assuming missing at random), power is severely compromised.  Under this MAR assumption, we can improve power while maintaining the unbiased property by using multiple imputation.  
+
+Below we print counts of missingness and implement the imputation method.  First, we do single subject-specific imputation using mixed modeling with IQ/Non-verbal IQ as the outcome and time, gender as fixed effects.  Random effects are a random intercept and random slope for time to represent subject-specific trends in IQ.  We then impute the missing value based on the subject's trend (fixed+random effects) at the given time point of missingness.  **We will move to a similar multiple imputation implementation**
+
+```{r missing_iq_plots}
+Full_Long %>%
+  select(MRVIQ, MRNVIQ) %>%
+  vis_miss()
+
+Full_Long %>%
+  select(age, MRVIQ, MRNVIQ) %>%
+  mutate(age_group=ifelse(16<=age & age<21,"16 to 21 months",
+                          ifelse(21<=age & age<26, "21 to 26 months",
+                                 ifelse(26<=age & age<34, "26 to 34 months",
+                                        ifelse(34<=age,"34+ months",NA))))) %>%
+  arrange(age) %>%
+  select(-age) %>%
+  gg_miss_fct(fct=age_group)
+```
+
+```{r missing_iq_impute}
+## Specify mixed models
+# For verbal IQ
+viq_mixedmodel <- 
+  lme(data=Full_Long, fixed=MRVIQ~age+Gender, 
+      random = ~1+age|INIT,
+    na.action = na.omit)
+
+# impute
+Full_Long_viq_impute <- Full_Long %>%
+  filter(is.na(age)==0) %>%
+  select(INIT, age, Gender) %>%
+  mutate(predict_mrviq_lme = predict(viq_mixedmodel, newdata = Full_Long %>%
+  filter(is.na(age)==0) %>%
+  select(INIT, age, Gender))) %>%
+  merge(Full_Long %>% select(INIT, age, Gender, MRVIQ)) %>% 
+  mutate(MRVIQ_naimpute = ifelse(is.na(MRVIQ)==0, MRVIQ, predict_mrviq_lme))
+
+# For nonverbal IQ
+nviq_mixedmodel <- 
+  lme(data=Full_Long, fixed=MRNVIQ~age+Gender, 
+      random = ~1+age|INIT,
+    na.action = na.omit)
+
+# Fill in
+Full_Long_nviq_impute <- Full_Long %>%
+  filter(is.na(age)==0) %>%
+  select(INIT, age, Gender) %>%
+  mutate(predict_mrnviq_lme = predict(nviq_mixedmodel, newdata = Full_Long %>%
+  filter(is.na(age)==0) %>%
+  select(INIT, age, Gender))) %>%
+  merge(Full_Long %>% select(INIT, age, Gender, MRNVIQ)) %>% 
+  mutate(MRNVIQ_naimpute = ifelse(is.na(MRNVIQ)==0, MRNVIQ, predict_mrnviq_lme))
+
+# Merge in
+Full_Long_iq_all_impute <- merge(Full_Long, Full_Long_viq_impute) %>%
+  merge(Full_Long_nviq_impute) %>%
+  select(INIT, age, Gender, MRVIQ, MRVIQ_naimpute, MRNVIQ, MRNVIQ_naimpute,
+         everything()) %>%
+  mutate(age_group=ifelse(16<=age & age<21,"16 to 21 months",
+                          ifelse(21<=age & age<26, "21 to 26 months",
+                                 ifelse(26<=age & age<34, "26 to 34 months",
+                                        ifelse(34<=age,"34+ months",NA)))))
+
+# Plot distributions 
+Full_Long_iq_all_impute_plotdata <- Full_Long_iq_all_impute %>%
+  pivot_longer(cols=c("MRVIQ", "MRVIQ_naimpute", "MRNVIQ", "MRNVIQ_naimpute"),
+               names_to="iq_type",
+               values_to="iq_value") %>%
+  mutate(iq_imputate_indicator = ifelse(grepl("impute", iq_type), "imputed", "observed"),
+         iq_type_adj=factor(str_remove(iq_type, "_naimpute"))) %>%
+  select(INIT, age, age_group, Gender, iq_type_adj, iq_imputate_indicator,
+         iq_value, everything()) %>%
+  distinct()
+
+ggplot(Full_Long_iq_all_impute_plotdata, mapping=aes(x=iq_value))+
+  geom_boxplot(notch=TRUE)+
+  facet_grid(iq_imputate_indicator~iq_type_adj)
+
+ggsave("plots_tables/obs_v_obsandimpute_iq_boxplot.jpg", scale = 2.5)
+
+# Include means and sds too
+impute_meansd_forplot <- Full_Long_iq_all_impute_plotdata %>%
+  group_by(age_group, iq_type_adj, iq_imputate_indicator) %>%
+  summarise(mean_iq = mean(iq_value, na.rm=TRUE),
+            sd_iq = sd(iq_value, na.rm=TRUE))
+
+ggplot(impute_meansd_forplot, mapping=aes(x=iq_imputate_indicator, y=mean_iq))+
+  facet_grid(age_group~iq_type_adj)+
+  geom_errorbar(aes(ymin=mean_iq-sd_iq, ymax=mean_iq+sd_iq))
+
+ggsave("plots_tables/obs_v_obsandimpute_iq_meansd.jpg", scale = 2.5)
+
+impute_iqtrend_forplot <- Full_Long_iq_all_impute %>%
+  mutate(mrviq_wasimputed=ifelse(is.na(MRVIQ)==0, "no","yes"),
+         mrnviq_wasimputed=ifelse(is.na(MRNVIQ)==0, "no","yes")) %>% 
+  select(INIT, age, age_group, Gender, MRVIQ, MRVIQ_naimpute, mrviq_wasimputed, 
+         MRNVIQ, MRNVIQ_naimpute, mrnviq_wasimputed,
+         everything())
+
+# Plot verbal
+ggplot(data=impute_iqtrend_forplot, aes(x=age, y=MRVIQ_naimpute,
+                                        group=INIT))+
+  geom_point(mapping=aes(color=mrviq_wasimputed))+
+  geom_line(mapping=aes(color=mrviq_wasimputed))
+ggsave("plots_tables/viq_trends_withimputed.jpg", scale = 2.5)
+
+# Plot nonverbal
+ggplot(data=impute_iqtrend_forplot, aes(x=age, y=MRNVIQ_naimpute,
+                                        group=INIT))+
+  geom_point(mapping=aes(color=mrnviq_wasimputed))+
+  geom_line(mapping=aes(color=mrnviq_wasimputed))  
+ggsave("plots_tables/nviq_trends_withimputed.jpg", scale = 2.5)
+  
+```
+
+## Modeling
+We consider 4 models, one for each outcome, with the following covariates: age, Verbal IQ and Non-Verbal IQ.  We see look at the class memberships for the infants in each of the 4 models.  We consider two types of modeling for each; latent class growth models (LCGA) and growth mixture models (GMM).  Both are extensions of mixed models, but the addition of unobserved/latent groups which are predicted by the model.  That is, along with fixed and random effects, we include class probability modeling which can be influenced by covariates as well as class-specific fixed effects.  The difference between the two is GMM allows the variance/covariance of the random effects to differ between the groups while LCGA forces them to be the same (and thus is computationally easier/has less parameters to estimate).  We use BIC to determine the "best fitting" model for each outcome, and consider 1, 2, and 3 latent groups (as separate models, 1 group is considered "baseline" model for comparison with respect to model fit).  Maximum likelihood through the expectation maximization (EM) algorithm is done for the estimation.  We use the dataset with imputed IQ values.  Note ID must be numeric for function to work (numeric IDs created in code).
+
+```{r gmm, eval=FALSE}
+boscc_scores <- c("AB_Code2RRBAvgTot", "AB_Code2SCAvgTot", "Code2SCAvgTot", "Code2RRBAvgTot")
+gmm_formulas <- list()
+gmm_fit <- list()
+fit_stats <- list()
+fit_stats_dfs <- list()
+
+num_ids <- 
+  data.frame(list("INIT" =unique(Full_Long_iq_all_impute$INIT), 
+                  "num_id"=as.numeric(seq(1:length(unique(Full_Long_iq_all_impute$INIT))))))
+
+Full_Long_NumID <- data.frame(inner_join(Full_Long_iq_all_impute, num_ids) %>%
+                                select(INIT, num_id, everything()))
+gmm_fixed_covariates <- c("age", "MRVIQ_naimpute", "MRNVIQ_naimpute", "Gender")
+mixture_covariates <- c("1","age")
+model_types <- c("lgcc","gmm_same_var", "gmm")
+
+for(i in 1:length(boscc_scores)){
+  gmm_formulas[[i]] <- 
+    as.formula(paste0(boscc_scores[i], "~", paste(gmm_fixed_covariates, collapse = "+")))
+  mixture_formula <- as.formula(paste0("~", paste(mixture_covariates, collapse = "+")))
+
+  gmm_fit[[i]] <- list()
+  fit_stats[[i]] <- list()
+
+  names(gmm_fit)[i] <- boscc_scores[i]
+  bics <- list()
+  
+  for(j in 1:length(model_types)){
+    gmm_fit[[i]][[model_types[j]]] <- list()
+    fit_stats[[i]][[model_types[j]]] <- list()
+    
+    nwg_value <- ifelse(model_types[j]=="gmm_same_var", FALSE, TRUE)
+    random_formula <- ~1+age
+
+    set.seed(123)
+    if(model_types[j]!="lgcc"){
+      gmm_fit[[i]][[model_types[j]]][["1_class"]] <-
+        hlme(gmm_formulas[[i]], 
+                subject="num_id", data=Full_Long_NumID,
+                ng=1,
+             random = random_formula)
+      
+      gmm_fit[[i]][[model_types[j]]][["2_class"]] <- 
+        gridsearch(rep = 100, maxiter = 10,
+                   minit = gmm_fit[[i]][[model_types[j]]][["1_class"]],
+                hlme(gmm_formulas[[i]], subject = "num_id",
+                ng = 2, data = Full_Long_NumID, 
+                mixture = mixture_formula,
+                random=random_formula,
+                nwg=nwg_value))
+      
+      gmm_fit[[i]][[model_types[j]]][["3_class"]] <- 
+        gridsearch(rep = 100, maxiter = 10,
+                minit = gmm_fit[[i]][[model_types[j]]][["1_class"]],
+                hlme(gmm_formulas[[i]], subject = "num_id",
+                ng = 3, data = Full_Long_NumID, 
+                mixture = mixture_formula,
+                random = random_formula,
+                nwg=nwg_value))
+    }else{
+      gmm_fit[[i]][[model_types[j]]][["1_class"]] <- 
+        hlme(gmm_formulas[[i]], 
+                subject="num_id", data=Full_Long_NumID,
+                ng=1)
+      
+      gmm_fit[[i]][[model_types[j]]][["2_class"]] <- 
+        gridsearch(rep = 100, maxiter = 10,
+                   minit = gmm_fit[[i]][[model_types[j]]][["1_class"]],
+                hlme(gmm_formulas[[i]], subject = "num_id",
+                ng = 2, data = Full_Long_NumID, 
+                mixture = mixture_formula))
+      
+      gmm_fit[[i]][[model_types[j]]][["3_class"]] <- 
+        gridsearch(rep = 100, maxiter = 10,
+                minit = gmm_fit[[i]][[model_types[j]]][["1_class"]],
+                hlme(gmm_formulas[[i]], subject = "num_id",
+                ng = 3, data = Full_Long_NumID, 
+                mixture = mixture_formula))
+    }
+    
+    # Consolidate fit results for all models into dataframe for each BOSCC
+    fit_stats[[i]][[model_types[j]]] <- 
+    data.frame(summarytable(gmm_fit[[i]][[model_types[j]]][["1_class"]],
+               gmm_fit[[i]][[model_types[j]]][["2_class"]], 
+               gmm_fit[[i]][[model_types[j]]][["3_class"]]),
+    "model_type"=model_types[j])
+    
+  lowest_bic <- 
+    which(fit_stats[[i]][[model_types[j]]][,"BIC"]==min(fit_stats[[i]][[model_types[j]]][,"BIC"]))
+  
+  gmm_fit[[i]][["best_fit_model"]][[model_types[j]]] <-
+    gmm_fit[[i]][[model_types[j]]][[lowest_bic]]
+  
+  bics[[j]] <- gmm_fit[[i]][["best_fit_model"]][[model_types[j]]]$BIC
+  }
+  
+  bic_min <- which(bics==min(unlist(bics)))[1]
+  gmm_fit[[i]][["best_fit_model"]][["across_models"]] <- 
+    gmm_fit[[i]][["best_fit_model"]][[bic_min]]
+  
+  # Consolidate fit results for all models into dataframe for each BOSCC Pt. 2
+  fit_stats_dfs[[i]] <- data.frame(do.call(rbind, fit_stats[[i]]), 
+                              "boscc_score"=boscc_scores[i])
+  rownames(fit_stats_dfs[[i]]) <- NULL
+}
+
+names(fit_stats) <- boscc_scores
+# Consolidate to single data frame
+fit_stats_df <- do.call(rbind, fit_stats_dfs)
+
+# Plot fits, color by model type, facet by boscc type
+ggplot(data=fit_stats_df, mapping=aes(y=BIC, x=G, color=model_type, 
+                                      group=model_type))+
+  facet_grid(boscc_score~., scales = "free")+
+  geom_point()+
+  geom_line()+
+  scale_color_discrete(name = "Model Type", 
+                      labels = c("Growth Mixture Model (GMM)", 
+                                 "GMM: Same Group Variance", 
+                                 "Latent Class Growth Analysis"))+
+  scale_x_continuous(limits=c(1,3), breaks=c(1,2,3))+
+  labs(title = "Goodness of fit statistics for latent growth models of BOSCC score using BIC.",
+       subtitle = "All models include age, verbal IQ and nonverbal IQ as fixed effects.\nGMM include random intercept and random slope for age.\nLCGA does not include random effects.")
+ggsave("plots_tables/bic_latent_growth_models.jpg", scale=2.5)
+
+obs_count_table <- Full_Long_NumID %>% 
+  select(c("INIT","age",
+           "AB_Code2RRBAvgTot", "AB_Code2SCAvgTot", "Code2SCAvgTot", "Code2RRBAvgTot",
+           "MRNVIQ_naimpute","MRVIQ_naimpute")) %>%
+  group_by(INIT) %>%
+  summarise(obs_counts = n())
+
+ftable(obs_count_table$obs_counts)
+
+# Also look at complete data
+obs_count_table_complete <- 
+  Full_Long_NumID %>% 
+  select(c("INIT","age",
+           "AB_Code2RRBAvgTot", "AB_Code2SCAvgTot", "Code2SCAvgTot", "Code2RRBAvgTot",
+           "MRNVIQ_naimpute","MRVIQ_naimpute"))  %>%
+  group_by(INIT) %>%
+  summarise(obs_counts = n())
+
+ftable(obs_count_table_complete$obs_counts)
+```
+
+## K-Means Analysis
+Can see GMMs do not identify significant latent groups based on the BIC criteria.  Thus, we consider a simple grouping analysis; group subjects based on BOSCC age trajectories only.  Recall the BOSCC by age plots previously; we see if we can group these trajectories.  First, let's just consider mixed modeling, and then grouping the estimated trajectories using a clustering algorithm.  Initially, we use k-means clustering.  We first estimate the trend for each subject over age linearly using a mixed effects model with fixed and random effects for age.  Then, each subject's predicted age-trajectory is saved.  We first attempted clustering the these trajectories; based on BIC, no significant clusters existed.  As a result, we then normalized the slopes (subtract mean of slopes, divide by standard deviation of slopes) and then clustered these normalized slopes.  We again use BIC to determine the "optimal" number of clusters and to compare to a "no clustering" structure.  BIC considers how well the points cluster together, as well as penalizing this fit for the number of clusters used to determine "significance" from no clusters.
+
+```{r age_boscc_mm_kmeans}
+boscc_scores <- c("AB_Code2RRBAvgTot", "AB_Code2SCAvgTot", "Code2SCAvgTot", "Code2RRBAvgTot")
+
+lmm_simple_fits <- list()
+est_traj_df <- list()
+
+clus_total_all_df <- list()
+bic_plots <- list()
+cluster_boxplots <- list()
+cluster_scatterplots <- list()
+
+ctrl <- lmeControl(opt='optim', maxIter=500, msMaxIter = 500)
+
+for(i in 1:length(boscc_scores)){
+mm_formula <- as.formula(paste0(boscc_scores[i],"~age"))
+lmm_simple_fits[[i]] <-
+  lme(mm_formula, 
+    data=Full_Long_iq_all_impute,
+    random = ~1+age|INIT,
+    na.action = na.omit,
+    control=ctrl)
+
+est_trajectories <-
+  lmm_simple_fits[[i]]$coefficients$fixed["age"]+
+  lmm_simple_fits[[i]]$coefficients$random$INIT[,"age"]
+
+est_intercepts <-
+  lmm_simple_fits[[i]]$coefficients$fixed["(Intercept)"]+
+  lmm_simple_fits[[i]]$coefficients$random$INIT[,"(Intercept)"]
+
+est_traj_values <- est_trajectories
+est_int_values <- est_intercepts
+
+names(est_traj_values) <- NULL
+names(est_int_values) <- NULL
+
+est_traj_df[[i]] <- data.frame("INIT"=names(est_trajectories),est_traj_values,
+                               est_int_values)
+
+est_traj_df[[i]]$est_traj_normalized <-
+  (est_traj_df[[i]]$est_traj_values-
+  mean(est_traj_df[[i]]$est_traj_values))/
+  sd(est_traj_df[[i]]$est_traj_values)
+  
+names(est_traj_df)[i] <- boscc_scores[i]
+
+clus_total_within_ss <- list("clusters"=NA, "critierion"=list())
+clus <- list()
+
+# Calc AIC and BIC
+kmeansAICBIC = function(fit){
+m = ncol(fit$centers)
+n = length(fit$cluster)
+k = nrow(fit$centers)
+D = fit$tot.withinss
+return(data.frame(AIC = D + 2*m*k,
+                  BIC = D + log(n)*m*k))
+}
+
+for(j in 1:8){
+  set.seed(123)
+  clus[[j]] <- 
+  kmeans(x=est_traj_df[[i]]%>%
+           select(est_traj_normalized),
+              centers=j, nstart=10)
+  clus_total_within_ss$clusters[j] <- j
+  clus_total_within_ss$critierion[[j]] <- kmeansAICBIC(clus[[j]])
+}
+
+clus_total_all_criterion <- do.call("rbind", clus_total_within_ss$critierion)
+clus_total_all_df[[i]] <- 
+  data.frame("cluster_no"=clus_total_within_ss$clusters, 
+             clus_total_all_criterion)
+
+names(clus_total_all_df)[i] <- boscc_scores[i]
+
+# Pick one with lowest BIC
+clus_lowest_bic <-
+  which(clus_total_all_df[[i]]$BIC==min(clus_total_all_df[[i]]$BIC))
+
+clus_best <- clus[[clus_lowest_bic]]
+
+est_traj_df[[i]] <- data.frame(est_traj_df[[i]],
+                               "cluster"=factor(clus_best$cluster))
+est_traj_df[[i]] <- inner_join(Full_Long_iq_all_impute, est_traj_df[[i]])
+
+# Create directory in folder for each BOSCC score
+dir.create(path=paste0("plots_tables/", boscc_scores[i]))
+
+# Plot BIC of clusters
+bic_plots[[i]] <- 
+  ggplot(data=clus_total_all_df[[i]], mapping=aes(x=cluster_no, y=BIC))+
+  geom_point()+
+  geom_path()+
+  theme_bw()+
+  xlab("Number of Clusters")+
+  labs(title=paste0("Cluster fit index using BIC for ",
+                    boscc_scores[i]))
+#print(bic_plots[[i]])
+ggsave(paste0("plots_tables/", boscc_scores[i],"/kmean_cluster_bic.jpg"), 
+       scale=2.5)
+
+names(bic_plots)[i] <- boscc_scores[i]
+
+# Plot observed trajectories and clusters
+# First, a boxplot of them
+est_traj_df_boxplot <- est_traj_df[[i]] %>%
+  pivot_longer(cols=c("est_traj_values", "est_int_values", "est_traj_normalized"),
+               names_to="boscc_est_type",
+               values_to="boscc_est_type_est") %>%
+  select(INIT, boscc_est_type, boscc_est_type_est, cluster) %>%
+  mutate(boscc_est_type=factor(boscc_est_type)) %>%
+  distinct()
+
+type_labels <- 
+  list("est_traj_values"="Estimated Trajectories",
+        "est_int_values"="Estimated Intercepts",
+       "est_traj_normalized"="Estimated Trajectories: Normalized")
+
+cluster_boxplots[[i]] <- 
+  ggplot(data=est_traj_df_boxplot%>%filter(boscc_est_type!="est_traj_values"),
+       mapping=aes(y=boscc_est_type_est, x=cluster, fill=cluster))+
+  facet_grid(boscc_est_type~., scales = "free",
+             labeller = as_labeller(c("est_int_values"="Estimated Intercepts",
+                                      "est_traj_normalized"=
+                                        "Estimated Trajectories: Normalized")))+
+  geom_boxplot()+
+  theme_bw()+
+  xlab("Cluster")+
+  ylab("Estimated Value")+
+  labs(title=paste0("Boxplot of estimated intercepts\nand normalized age trajectories for ", boscc_scores[i]),
+       fill="Cluster")
+
+#print(cluster_boxplots[[i]])
+ggsave(paste0("plots_tables/", boscc_scores[i],"/kmean_int_traj_boxplot.jpg"), 
+       scale=2.5)
+names(cluster_boxplots)[i] <- boscc_scores[i]
+
+cluster_scatterplots[[i]] <- 
+  ggplot(data=est_traj_df[[i]], mapping=aes_string(x="est_traj_normalized",                                                 y="est_int_values",
+                                                 group="INIT",
+                                                 color="cluster"))+
+  geom_point()+
+  theme_bw()+
+  xlab("Estimated Trajectory: Normalized")+
+  ylab("Estimated Intercept")+
+  labs(title=paste0("Scatterplot of estimated intercepts by\nnormalized estimated age-based score trajectories for\n",
+                    boscc_scores[i]),
+       color="Cluster")
+
+#print(cluster_scatterplots[[i]])
+ggsave(paste0("plots_tables/", boscc_scores[i],"/kmean_int_traj_mms.jpg"), 
+       scale=2.5)
+names(cluster_scatterplots)[i] <- boscc_scores[i]
+
+est_traj_df[[i]] <- est_traj_df[[i]] %>%
+  plyr::rename(replace=c("cluster"=paste0(boscc_scores[i],"_cluster"),
+                         "est_traj_normalized"=paste0(boscc_scores[i],
+                                                      "_est_traj_normalized"),
+                         "est_traj_values"=paste0(boscc_scores[i],
+                                                  "_est_traj_values"),
+                         "est_int_values"=paste0(boscc_scores[i],
+                                                 "_est_int_values")))
+}
+
+# merge all cluster datasets
+df_all_clust <- est_traj_df %>%
+  Reduce(function(x,y)left_join(x,y), .)
+
+# first plot bics in panel
+ggarrange(plotlist=bic_plots)
+ggsave(filename = "plots_tables/bic_cluster_results.jpg",
+       limitsize = FALSE,
+       scale=2.5)
+
+# next boxplots
+ggarrange(plotlist=cluster_boxplots, common.legend = TRUE)
+ggsave(filename = "plots_tables/boxplot_cluster_results.jpg", 
+       limitsize = FALSE,
+       scale=2.5)
+
+# then scatterplots
+ggarrange(plotlist=cluster_scatterplots, common.legend = TRUE)
+ggsave(filename = "plots_tables/scatterplot_cluster_results.jpg",
+       limitsize = FALSE, 
+       scale=2.5)
+```
+
+```{r kmeans_individual_plotting}
+# First, name clusters using order of means of normalized trajectories
+# NOTE: Negative mean => improving, Positive => worsening
+df_all_clust_fornaming <-
+  inner_join(df_all_clust %>%
+  select(c("INIT", 
+           names(df_all_clust)[grepl("clust", names(df_all_clust))])) %>%
+  distinct() %>%
+  pivot_longer(cols=names(df_all_clust)[grepl("clust", names(df_all_clust))],
+                 names_to="boscc_type",
+                 values_to="cluster") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot_clus") %>%
+    select(-trash),
+  df_all_clust %>%
+  select(c("INIT",
+           names(df_all_clust)[grepl("traj_norm", names(df_all_clust))])) %>%
+  distinct() %>%
+  pivot_longer(cols=names(df_all_clust)[grepl("traj_norm", names(df_all_clust))],
+                 names_to="boscc_type",
+                 values_to="normal_traj_est") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot_est_traj") %>%
+    select(-trash)
+  )
+
+cluster_means_byboscc <-
+  df_all_clust_fornaming %>%
+  group_by(boscc_type, cluster) %>%
+  summarise(mean_traj=mean(normal_traj_est),
+            cluster_size=n(),
+            sd_traj=sd(normal_traj_est)) %>%
+  arrange(boscc_type, mean_traj) %>%
+  ungroup()
+
+cluster_labels <- rep(c("Improving", "Stable", "Worsening"),
+                      length(unique(cluster_means_byboscc$boscc_type)))
+
+cluster_means_byboscc_plot <- 
+  data.frame(cluster_means_byboscc,"cluster_labels"=cluster_labels) %>%
+  mutate(boscc_subscale=ifelse(grepl("RRB", boscc_type),"RRB","SC"),
+         boscc_type=ifelse(grepl("AB_Code2", boscc_type), "ADOS BOSCC",
+                                 "BOSCC")) %>%
+  mutate(cluster_labels=
+           factor(ifelse(boscc_subscale=="RRB", cluster_labels,
+                               ifelse(cluster_labels=="Worsening", "Low",
+                                      ifelse(cluster_labels=="Stable", "Moderate",
+                                             "High"))),
+                  levels = c("Improving", "Stable", "Worsening",
+                             "High", "Moderate", "Low")),
+         boscc_type=ifelse(boscc_type=="BOSCC", "Standard BOSCC", boscc_type))
+
+
+# First, plot these labels and means with error bars and sample size
+ggplot(data=cluster_means_byboscc_plot,
+         mapping=aes(x=cluster_labels, y=mean_traj))+
+  facet_grid(boscc_type~boscc_subscale, scales = "free")+
+  geom_point()+
+  geom_errorbar(aes(ymin=mean_traj-1.96*sd_traj/sqrt(cluster_size),
+                    ymax=mean_traj+1.96*sd_traj/sqrt(cluster_size)))+
+  geom_text(aes(cluster_labels, Inf, 
+                label = paste0("n = ",cluster_size)), vjust = 1, size=6)+
+  geom_hline(yintercept = 0, linetype="dashed")+
+  ylim(c(-2,2.75))+
+  theme_bw()+
+  labs(title="Estimated normalized age-trajectory means with standard errors and sample sizes\nfor clusters for each BOSCC score type.\nLabels determined by means.")+
+  xlab("Cluster")+
+  ylab("Mean normalized trajectory")+
+  theme(text = element_text(size=20))
+ggsave("plots_tables/cluster_labels_means_ses.jpg",
+       scale=2.5, limitsize = FALSE)  
+
+# Then plot, first formatting data for plotting
+df_all_clust_plot <-
+  inner_join(df_all_clust %>%
+  select(c("INIT", "age", 
+           names(df_all_clust)[grepl("clust", names(df_all_clust))])) %>%
+    pivot_longer(cols=names(df_all_clust)[grepl("clust", names(df_all_clust))],
+                 names_to="boscc_type",
+                 values_to="cluster") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot_clus") %>%
+    select(-trash),
+  df_all_clust %>%
+  select(c("INIT", "age", 
+           boscc_scores)) %>%
+    pivot_longer(cols=boscc_scores,
+                 names_to="boscc_type",
+                 values_to="boscc_score") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot") %>%
+    select(-trash)) %>%
+  mutate(boscc_subscale=ifelse(grepl("RRB", boscc_type),"RRB","SC"),
+         boscc_type=ifelse(grepl("AB_Code2", boscc_type), "ADOS BOSCC",
+                                 "Standard BOSCC"))
+
+df_all_clust_plot <- inner_join(df_all_clust_plot, cluster_means_byboscc_plot,
+                                by=c("cluster","boscc_type","boscc_subscale"))
+
+# 1: Plot BOSCC score by cluster
+rrb_obs_traj_plot <-
+  ggplot(data=df_all_clust_plot %>% filter(boscc_subscale=="RRB"), 
+         mapping=aes(x=age, y=boscc_score,
+                     color=cluster_labels,
+                     group=INIT))+
+    facet_grid(~boscc_type)+
+    geom_point(size=3)+
+    geom_line()+
+    theme_bw()+
+    xlab("Age (months)")+
+    ylab("Raw score")+
+    scale_y_continuous(limits=c(0, 45))+
+    labs(title="RRB",
+         color="Cluster")+ 
+    scale_color_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    theme(text = element_text(size=35),
+          plot.title = element_text(hjust = 0.5))
+
+sc_obs_traj_plot <-
+  ggplot(data=df_all_clust_plot %>% filter(boscc_subscale=="SC"), 
+         mapping=aes(x=age, y=boscc_score,
+                     color=cluster_labels,
+                     group=INIT))+
+    facet_grid(~boscc_type)+
+    geom_point(size=3)+
+    geom_line()+
+    theme_bw()+
+    xlab("")+
+    ylab("Raw score")+
+    scale_y_continuous(limits=c(0, 45))+
+    labs(title="SC",
+         color="Cluster")+ 
+    scale_color_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    theme(text = element_text(size=35),
+          plot.title = element_text(hjust = 0.5))
+
+ggarrange(plotlist = list(sc_obs_traj_plot, rrb_obs_traj_plot), ncol=1)
+ggsave("plots_tables/firstage_bo.jpg",
+       scale=2.5, limitsize = FALSE)
+
+rrb_obs_traj_plot <-
+  ggplot(data=df_all_clust_plot %>% filter(boscc_subscale=="RRB"), 
+         mapping=aes(x=age, y=boscc_score,
+                     color=cluster_labels))+
+    facet_grid(~boscc_type)+
+    geom_point(size=1, alpha=0.25)+
+    geom_line(mapping=aes(group=INIT), alpha=0.25)+
+    geom_smooth(se=FALSE, method="lm", size=2)+
+    theme_bw()+
+    xlab("Age (months)")+
+    ylab("Raw score")+
+    scale_y_continuous(limits=c(0, 45))+
+    labs(title="RRB",
+         color="Cluster")+ 
+    scale_color_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    theme(text = element_text(size=35),
+          plot.title = element_text(hjust = 0.5))
+
+sc_obs_traj_plot <-
+  ggplot(data=df_all_clust_plot %>% filter(boscc_subscale=="SC"), 
+         mapping=aes(x=age, y=boscc_score,
+                     color=cluster_labels))+
+    facet_grid(~boscc_type)+
+    geom_point(size=1, alpha=0.25)+
+    geom_line(mapping=aes(group=INIT), alpha=0.25)+
+    geom_smooth(se=FALSE, method="lm", size=2)+
+    theme_bw()+
+    xlab("")+
+    ylab("Raw score")+
+    scale_y_continuous(limits=c(0, 45))+
+    labs(title="SC",
+         color="Cluster")+ 
+    scale_color_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    theme(text = element_text(size=35),
+          plot.title = element_text(hjust = 0.5))
+
+ggarrange(plotlist = list(sc_obs_traj_plot, rrb_obs_traj_plot), ncol=1)
+ggsave("plots_tables/firstage_bo_smooth.jpg",
+       scale=2.5, limitsize = FALSE)
+
+# 2: Plot IQ boxplot/violin plots by cluster for each of 4 clusterings
+age_init_grid <-
+  Full_Long_iq_all_impute %>%
+  select(INIT, age) %>%
+  group_by(INIT) %>%
+  filter(row_number()==1) %>%
+  ungroup()
+
+df_all_clust_plot_1stage <-
+  list(age_init_grid, Full_Long_iq_all_impute, df_all_clust_plot) %>%
+  Reduce(function(x,y)left_join(x,y), .) %>%
+  select(-boscc_scores) %>%
+  pivot_longer(cols=c("MRVIQ","MRNVIQ"),
+               names_to="iq_type",
+               values_to="iq_value")
+
+ggplot(data=df_all_clust_plot_1stage, 
+       mapping=aes(x=iq_type, y=iq_value, fill=cluster_labels))+
+  facet_grid(boscc_subscale~boscc_type)+
+  geom_boxplot()+
+  xlab("IQ Type")+
+  ylab("IQ Score")+
+  labs(title="IQ score boxplots by cluster membership for each BOSCC score type clustering analysis,\nfor child's first age of observation only.",
+       fill="Cluster (RRB; SC)")+
+  scale_x_discrete(labels=c("MRNVIQ"="Nonverbal IQ",
+                            "MRVIQ"="Verbal IQ"))+
+  theme_bw()+ 
+  scale_fill_manual(values=c("#009E73", "#E69F00", "#56B4E9",
+                              "#009E73", "#E69F00", "#56B4E9"))+
+  theme(text = element_text(size=20))
+ggsave("plots_tables/separate_clust_iq_firstage_boxplot.jpg",
+       scale=2.5, limitsize = FALSE)
+
+ggplot(data=df_all_clust_plot_1stage, 
+       mapping=aes(x=iq_type, y=iq_value, fill=cluster_labels))+
+  facet_grid(boscc_subscale~boscc_type)+
+  geom_violin(draw_quantiles=c(0.5))+
+  xlab("IQ Type")+
+  ylab("IQ Score")+
+  labs(title="IQ score violin plots by cluster membership\nfor each BOSCC score type clustering analysis,\nfor child's first age of observation only.\nLine indicates median IQ score.",
+       fill="Cluster (RRB; SC)")+
+  scale_x_discrete(labels=c("MRNVIQ"="Nonverbal IQ",
+                            "MRVIQ"="Verbal IQ"))+
+  theme_bw()+ 
+  scale_fill_manual(values=c("#009E73", "#E69F00", "#56B4E9",
+                              "#009E73", "#E69F00", "#56B4E9"))+
+  theme(text = element_text(size=20))
+ggsave("plots_tables/separate_clust_iq_firstage_violin.jpg",
+       scale=2.5, limitsize = FALSE)
+
+# 3: Redo 4-panel traj by intercept scatterplot with informative labels
+df_all_clust_fornaming_with_ints <-
+  inner_join(df_all_clust_fornaming,
+  df_all_clust %>%
+  select(c("INIT",
+           names(df_all_clust)[grepl("est_int", names(df_all_clust))])) %>%
+  distinct() %>%
+  pivot_longer(cols=names(df_all_clust)[grepl("est_int", names(df_all_clust))],
+                 names_to="boscc_type",
+                 values_to="int_est") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot_est_int") %>%
+    select(-trash)
+  )
+
+df_all_clust_fornaming_with_ints_plot <- 
+  inner_join(df_all_clust_fornaming_with_ints,
+             data.frame(cluster_means_byboscc,
+                        "cluster_labels"=cluster_means_byboscc_plot$cluster_labels),
+             by=c("boscc_type", "cluster")) %>%
+  mutate(boscc_subscale=ifelse(grepl("RRB", boscc_type),"RRB","SC"),
+         boscc_type=ifelse(grepl("AB_Code2", boscc_type), "ADOS BOSCC",
+                                 "Standard BOSCC"))
+
+# Now plot
+ggplot(data=df_all_clust_fornaming_with_ints_plot,
+       mapping=aes(x=normal_traj_est, y=int_est,
+                   color=cluster_labels)) +
+  facet_grid(boscc_subscale~boscc_type, scales="free") +
+  geom_point(size=3)+
+  theme_bw()+
+  xlab("Estimated Trajectory: Normalized")+
+  ylab("Estimated Intercept")+
+  labs(title="Scatterplot of estimated intercepts by normalized age-trajectory\nfor each BOSCC score type cluster.",
+       color="Cluster (RRB; SC)")+ 
+  scale_color_manual(values=c("#009E73", "#E69F00", "#56B4E9",
+                              "#009E73", "#E69F00", "#56B4E9"))+
+  theme(text = element_text(size=20))
+ggsave("plots_tables/scatterplot_results.jpg",
+       scale=2.5, limitsize = FALSE)
+```
+
+
+```{r kmeans_individ_anova}
+# ANOVA For IQ and intercept
+# First need dataset with est ints and IQ vars. Also need to add covariates
+Full_Long_agerange <-
+  Full_Long %>% 
+    select(INIT, age) %>%
+    group_by(INIT) %>%
+    summarise(time_in_treat = max(age)-min(age),
+              first_age = min(age))
+
+df_all_clust_anova <- 
+  inner_join(df_all_clust_fornaming_with_ints_plot, 
+             list(age_init_grid, Full_Long_iq_all_impute, df_all_clust_plot) %>%
+                Reduce(function(x,y)left_join(x,y), .) %>%
+               inner_join(Full_Long_agerange) %>%
+                select(INIT, MRVIQ, MRNVIQ, CSS_sa, CSS_rrb,
+                       first_age,
+                       boscc_type, boscc_subscale,
+                       cluster, cluster_labels),
+             by=c("INIT","boscc_type", "boscc_subscale",
+                  "cluster","cluster_labels"))
+
+vars_for_anova <- 
+  c("int_est", "MRVIQ", "MRNVIQ", "CSS_sa", "CSS_rrb", "first_age")
+
+# RECALL: THESE NOT USED FOR CLUSTERING SO OK TO TEST
+boscc_type_values <- 
+  unique(df_all_clust_fornaming_with_ints_plot%>%select(boscc_type))%>%
+  unlist()
+
+boscc_subscore_values <- 
+  unique(df_all_clust_fornaming_with_ints_plot%>%select(boscc_subscale))%>%
+  unlist()
+
+aov_fits <- list()
+aov_fits_ftest_df <- 
+  cluster_means_byboscc_plot %>% 
+    select(boscc_type, boscc_subscale, cluster_labels, cluster) %>%
+    mutate(cluster_labels=factor(ifelse(cluster_labels=="Improving", "Worsening_v_Stable",
+                                 ifelse(cluster_labels=="High", "Low_v_Moderate",
+                                        as.character(cluster_labels))),
+                                 levels=c("Stable", "Worsening", "Worsening_v_Stable", 
+                                                 "Moderate", "Low", "Low_v_Moderate"))) %>%
+    arrange(boscc_type, boscc_subscale, cluster_labels)
+
+# Add variables to hold p-values for group tests, pairwise tests
+aov_fits_ftest_df[, paste0(rep(c("signif_diff_", "pairwise_diff_", "pairwise_effect_size_"), 
+               each=length(vars_for_anova)), vars_for_anova)] <- NA
+
+for(k in 1:length(vars_for_anova)){ 
+  aov_fits[[k]] <- list()
+  names(aov_fits)[k] <- vars_for_anova[k]
+  
+  for(i in 1:length(boscc_type_values)){
+    aov_fits[[k]][[i]] <- list()
+    names(aov_fits[[k]])[i] <- boscc_type_values[i]
+    
+    for(j in 1:length(boscc_subscore_values)){
+      aov_fits[[k]][[i]][[j]] <- list()
+      names(aov_fits[[k]][[i]])[j] <- boscc_subscore_values[j]
+      
+      aov_fit_data <- 
+        df_all_clust_anova %>%
+        filter(boscc_type==boscc_type_values[i]&
+                boscc_subscale==boscc_subscore_values[j])
+      
+      aov_fits[[k]][[i]][[j]][["anova_fit"]] <-
+        kruskal.test(as.formula(paste0(vars_for_anova[k],"~","cluster_labels")), 
+            data=aov_fit_data)
+      
+      aov_fits[[k]][[i]][[j]][["pairwise_comps"]] <-
+        pairwise.wilcox.test(x=aov_fit_data[[vars_for_anova[k]]], 
+                        g=aov_fit_data[["cluster_labels"]],
+                        p.adjust.method = "BH")
+      
+      # Add overall group comp - F test
+      aov_fits_ftest_df[
+        which(aov_fits_ftest_df$boscc_type==boscc_type_values[i]&
+              aov_fits_ftest_df$boscc_subscale==boscc_subscore_values[j]),
+        which(grepl(paste0("signif_diff_",vars_for_anova[k]),
+                    names(aov_fits_ftest_df)))] <-
+        aov_fits[[k]][[i]][[j]][["anova_fit"]]$p.value
+      
+      # Add pairwise comps - FDR corrected T test
+      pairwise_test_vector_vs_improving <- 
+        if(boscc_subscore_values[j]=="RRB"){
+          c(aov_fits[[k]][[i]][[j]][["pairwise_comps"]]$p.value[,"Improving"],
+          "Worsening_v_Stable"=aov_fits[[k]][[i]][[j]][["pairwise_comps"]]$p.value["Worsening", "Stable"])
+        }else{
+          c(aov_fits[[k]][[i]][[j]][["pairwise_comps"]]$p.value[,"High"],
+          "Low_v_Moderate"=aov_fits[[k]][[i]][[j]][["pairwise_comps"]]$p.value["Low", "Moderate"])
+        }
+      
+      pairwise_test_vector_vs_improving_df <- 
+        data.frame("cluster_labels"=names(pairwise_test_vector_vs_improving),
+                   "pairwise_comps"=pairwise_test_vector_vs_improving)
+      
+      row.names(pairwise_test_vector_vs_improving_df)=NULL
+      
+      aov_fits_ftest_df[
+        which(aov_fits_ftest_df$boscc_type==boscc_type_values[i]&
+              aov_fits_ftest_df$boscc_subscale==boscc_subscore_values[j]),
+        grepl(paste0("pairwise_diff_",vars_for_anova[k]),
+              names(aov_fits_ftest_df))] <- 
+        pairwise_test_vector_vs_improving_df %>%
+            #arrange(cluster_labels) %>%
+            select(pairwise_comps) %>%
+            unlist()
+      
+      # Add in effect size for pairwise comps
+      lm_model_fit <- lm(as.formula(paste0(vars_for_anova[k], "~cluster_labels")),
+                         data=aov_fit_data)
+      pairwise_cohensd_obj <- emmeans::eff_size(emmeans::emmeans(lm_model_fit, "cluster_labels"), 
+               sigma = sigma(lm_model_fit), edf = df.residual(lm_model_fit))
+      pairwise_cohensd_df <- data.frame("cluster_labels_raw"=summary(pairwise_cohensd_obj)$contrast,
+                 "effect_size"=-summary(pairwise_cohensd_obj)$effect.size) %>%
+        mutate(cluster_labels=ifelse(cluster_labels_raw=="High - Moderate", "Moderate",
+                                     ifelse(cluster_labels_raw=="High - Low", "Low",
+                                            ifelse(cluster_labels_raw=="Moderate - Low", 
+                                                   "Low_v_Moderate",
+                              ifelse(cluster_labels_raw=="Improving - Stable", "Stable",
+                                     ifelse(cluster_labels_raw=="Improving - Worsening", "Worsening",
+                                            ifelse(cluster_labels_raw=="Stable - Worsening",
+                                                   "Worsening_v_Stable", NA))))))) %>%
+        plyr::rename(replace=c("effect_size"=paste0("pairwise_effect_size_", vars_for_anova[k])))
+      
+      aov_fits_ftest_df[
+        which(aov_fits_ftest_df$boscc_type==boscc_type_values[i]&
+              aov_fits_ftest_df$boscc_subscale==boscc_subscore_values[j]),
+        grepl(paste0("pairwise_effect_size_",vars_for_anova[k]),
+              names(aov_fits_ftest_df))] <- 
+        pairwise_cohensd_df[[paste0("pairwise_effect_size_",vars_for_anova[k])]]
+    }
+  }
+}
+
+# Try to re-do two plots to add sign. info
+# 2: Plot IQ boxplot/violin plots by cluster for each of 4 clusterings
+aov_fits_ftest_df_v2 <- 
+  inner_join(aov_fits_ftest_df %>%
+  select(-names(aov_fits_ftest_df)[grepl("pairwise_diff_|pairwise_effect_size_", 
+                                         names(aov_fits_ftest_df))])%>%
+  pivot_longer(cols=names(aov_fits_ftest_df)[grepl("signif_diff", 
+                                         names(aov_fits_ftest_df))],
+               names_to="test_type",
+               values_to="group_diff_test")%>%
+  separate(col=test_type, into=c("test_type","variable"), sep="_diff_")%>%
+  select(-test_type),
+  aov_fits_ftest_df %>%
+  select(-names(aov_fits_ftest_df)[grepl("signif_diff|pairwise_effect_size_", 
+                                         names(aov_fits_ftest_df))])%>%
+  pivot_longer(cols=names(aov_fits_ftest_df)[grepl("pairwise_diff_", 
+                                         names(aov_fits_ftest_df))],
+               names_to="test_type",
+               values_to="pairwise_diff_test")%>%
+  separate(col=test_type, into=c("test_type","variable"), sep="_diff_")%>%
+  select(-test_type))
+
+# Variables on very different scales; we norm them
+covariate_values_normed_df <- 
+  df_all_clust_anova %>%
+         pivot_longer(cols=vars_for_anova, names_to="covariate_name",
+                      values_to="covariate_value") %>%
+  select(INIT, covariate_name, covariate_value) %>%
+  filter(covariate_name!="int_est") %>%
+  distinct(.) %>%
+  group_by(covariate_name) %>%
+  mutate(covariate_value_normed = 
+           (covariate_value-mean(covariate_value, na.rm=TRUE))/sd(covariate_value,
+                                                                  na.rm=TRUE))
+rrb_boxplot_preds <-
+  ggplot(data=df_all_clust_anova %>%
+           pivot_longer(cols=vars_for_anova, names_to="covariate_name",
+                        values_to="covariate_value") %>%
+           filter(covariate_name!="int_est") %>%
+           inner_join(covariate_values_normed_df) %>%
+           filter(boscc_subscale=="RRB"))+
+    #facet_grid(~boscc_type)+
+    geom_boxplot_pattern(mapping=aes(x=covariate_name, y=covariate_value_normed, 
+                     pattern=boscc_type, fill=cluster_labels),
+                     position = position_dodge(preserve = "single"), 
+                     color = "black", pattern_fill= "black",
+                     pattern_angle = 45,
+                     pattern_density = 0.1,
+                     pattern_spacing = 0.025,
+                     pattern_key_scale_factor = 0.6)+
+    scale_pattern_manual("BOSCC Type", values = c("none", "stripe"))+
+    xlab("")+
+    ylab("Normed Value")+
+    # labs(title="Covariate boxplots by cluster membership for each BOSCC score type clustering analysis,\ncovariate for child's first age of observation only.\n* indicates <0.05, ** < 0.01, *** <0.001 based on Mann-Whitney test of group differences in median.",
+    #      fill="Cluster (RRB; SC)")+
+    labs(title="RRB", fill="Cluster", x="")+
+    scale_x_discrete(labels=c("CSS_sa"="CSS-SA",
+                              "CSS_rrb"="CSS-RRB",
+                              "MRNVIQ"="Nonverbal IQ",
+                              "MRVIQ"="Verbal IQ",
+                              "first_age"="Initial Age"))+
+    scale_fill_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    geom_text(data=aov_fits_ftest_df_v2 %>% 
+                filter(variable!="int_est"&boscc_subscale=="RRB") %>%
+                plyr::rename(replace=c("variable"="covariate_name")) %>%
+                mutate(sign_ind = ifelse(0.01<=group_diff_test&group_diff_test<0.05,"*",                              
+                                 ifelse(0.001<=group_diff_test&group_diff_test<0.01,"**",
+                                        ifelse(group_diff_test&group_diff_test<0.001,"***",
+                                               "")))),
+              mapping=aes(x=covariate_name, y=Inf,
+                          label = sign_ind, color=boscc_type), 
+              vjust=1,
+              size=13,
+              position = position_dodge(width=0.9))+
+    scale_color_manual(values = c("black", "black"))+
+    guides(pattern = guide_legend(order = 1),
+           color="none",
+           fill = guide_legend(override.aes = list(order = 2, pattern = "none")))+
+    theme_bw()+ 
+    theme(text = element_text(size=25),
+          plot.title = element_text(hjust = 0.5))
+
+sc_boxplot_preds <-
+  ggplot(data=df_all_clust_anova %>%
+           pivot_longer(cols=vars_for_anova, names_to="covariate_name",
+                        values_to="covariate_value") %>%
+           filter(covariate_name!="int_est") %>%
+           inner_join(covariate_values_normed_df) %>%
+           filter(boscc_subscale=="SC"))+
+    #facet_grid(~boscc_type)+
+    geom_boxplot_pattern(mapping=aes(x=covariate_name, y=covariate_value_normed, 
+                     pattern=boscc_type, fill=cluster_labels),
+                     position = position_dodge(preserve = "single"), 
+                     color = "black", pattern_fill= "black",
+                     pattern_angle = 45,
+                     pattern_density = 0.1,
+                     pattern_spacing = 0.025,
+                     pattern_key_scale_factor = 0.6)+
+    scale_pattern_manual("BOSCC Type", values = c("none", "stripe"))+
+    xlab("")+
+    ylab("Normed Value")+
+    # labs(title="Covariate boxplots by cluster membership for each BOSCC score type clustering analysis,\ncovariate for child's first age of observation only.\n* indicates <0.05, ** < 0.01, *** <0.001 based on Mann-Whitney test of group differences in median.",
+    #      fill="Cluster (RRB; SC)")+
+    labs(title="SC", fill="Cluster")+
+    scale_x_discrete(labels=c("CSS_sa"="CSS-SA",
+                              "CSS_rrb"="CSS-RRB",
+                              "MRNVIQ"="Nonverbal IQ",
+                              "MRVIQ"="Verbal IQ",
+                              "first_age"="Initial Age"))+
+    scale_fill_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    geom_text(data=aov_fits_ftest_df_v2 %>% 
+                filter(variable!="int_est"&boscc_subscale=="SC") %>%
+                plyr::rename(replace=c("variable"="covariate_name")) %>%
+                mutate(sign_ind = ifelse(0.01<=group_diff_test&group_diff_test<0.05,"*",                              
+                                 ifelse(0.001<=group_diff_test&group_diff_test<0.01,"**",
+                                        ifelse(group_diff_test&group_diff_test<0.001,"***",
+                                               "")))),
+              mapping=aes(x=covariate_name, y=Inf,
+                          label = sign_ind, color=boscc_type), 
+              vjust=1,
+              size=13,
+              position = position_dodge(width=0.9))+
+    scale_color_manual(values = c("black", "black"))+
+    guides(pattern = guide_legend(order = 1),
+           color = "none",
+           fill = guide_legend(order = 2,
+                               override.aes = list(pattern = "none")))+
+    theme_bw()+ 
+    theme(text = element_text(size=25),
+          plot.title = element_text(hjust = 0.5))
+
+ggarrange(plotlist = list(sc_boxplot_preds, 
+                          rrb_boxplot_preds+
+                            labs(caption = "Asterisks denote p-values for Mann-Whitney test of median differences between clusters within BOSCC Type:\n*=p<0.05, **=p<0.01, ***=p<0.001")+
+                            theme(plot.caption = element_text(hjust = 0))), 
+          ncol=1)
+ggsave("plots_tables/separate_clust_iq_firstage_boxplot.jpg",
+       scale=2, limitsize = FALSE)
+
+# Create separate plots for each BOSCC Type
+for(i in 1:length(boscc_subscore_values)){
+  ggplot(data=df_all_clust_anova %>%
+         pivot_longer(cols=vars_for_anova, names_to="covariate_name",
+                      values_to="covariate_value") %>%
+         filter(covariate_name!="int_est") %>%
+         filter(boscc_subscale==boscc_subscore_values[i]) %>%
+         inner_join(covariate_values_normed_df) %>%
+         mutate(cluster_labels=factor(cluster_labels)), 
+       mapping=aes(x=covariate_name, y=covariate_value_normed, 
+                   fill=cluster_labels))+
+  facet_grid(~boscc_type)+
+  geom_boxplot()+
+  xlab("Covariate")+
+  ylab("Normed Value")+
+  # labs(title="* indicates <0.05, ** < 0.01, *** <0.001\nbased on Mann-Whitney test of group differences in median",
+  #      fill="Cluster")+
+  labs(title="", fill="Cluster")+
+  scale_x_discrete(labels=c("CSS_sa"="CSS-SA",
+                            "CSS_rrb"="CSS-RRB",
+                            "MRNVIQ"="Nonverbal IQ",
+                            "MRVIQ"="Verbal IQ",
+                            "first_age"="Initial Age"))+
+  geom_text(data=aov_fits_ftest_df_v2 %>% 
+              filter(variable!="int_est"&!grepl("_v_", cluster_labels)) %>% 
+              filter(boscc_subscale==boscc_subscore_values[i]),
+            aes(variable, Inf, 
+                label = ifelse(0.01<=group_diff_test&group_diff_test<0.05,"*",                               ifelse(0.001<=group_diff_test&group_diff_test<0.01,"**",                                      
+                                                                                                                    ifelse(group_diff_test&group_diff_test<0.001,"***",
+                                             "")))), 
+            vjust = 1,
+            color="black", size=8)+
+  theme_bw()+ 
+  theme(text = element_text(size=25),
+        legend.title = element_text(size = 25),
+        legend.text = element_text(size = 25),
+        axis.text.x = element_text(angle = 45, vjust = 0.60, hjust=0.5))+
+  scale_fill_manual(values=c("white", "grey65", "grey40"))
+ggsave(filename=paste0("plots_tables/separate_clust_iq_firstage_boxplot_", 
+              boscc_subscore_values[i], ".png"), scale=2.5, limitsize = FALSE)
+}
+
+# Create table with all sig comparisons to see pairwise comps
+## Add in pairwise effect sizes too
+aov_fits_ftest_df_v3 <- 
+  aov_fits_ftest_df_v2 %>%
+  inner_join(aov_fits_ftest_df %>%
+  select(-names(aov_fits_ftest_df)[grepl("pairwise_diff_|signif_diff", 
+                                         names(aov_fits_ftest_df))])%>%
+  pivot_longer(cols=names(aov_fits_ftest_df)[grepl("pairwise_effect_size", 
+                                         names(aov_fits_ftest_df))],
+               names_to="test_type",
+               values_to="pairwise_effect_size")%>%
+  separate(col=test_type, into=c("test_type","variable"), sep="_effect_size_")%>%
+  select(-test_type))
+
+sign_test_pairwise_table <- 
+  aov_fits_ftest_df_v3 %>% 
+  filter(variable!="int_est") %>%
+  filter(group_diff_test<0.05) %>%
+  select(-cluster) %>%
+  filter(cluster_labels!="Improving"&cluster_labels!="High") %>%
+  select(boscc_subscale, boscc_type, variable,cluster_labels, everything()) %>%
+  arrange(desc(boscc_subscale), boscc_type, variable, cluster_labels)
+
+sig_pairwise_indices <- 
+  which(sign_test_pairwise_table$pairwise_diff_test<0.05)
+
+# Flex table
+# kable(sign_test_pairwise_table, digits = 4) %>%
+#   kable_styling() %>%
+#   row_spec(sig_pairwise_indices, 
+#             color = "white", 
+#            background = "blue") %>%
+#   column_spec(1:3,
+#               color = "black",
+#               background = "white") %>%
+#   collapse_rows(columns = 1:3, valign = "top") %>%
+#   save_kable(file = "plots_tables/pairwise_sig_tests.jpg")
+
+flextable(sign_test_pairwise_table) %>%
+  colformat_double(digits=3) %>%
+  set_header_labels(values=list(boscc_subscale="BOSCC Subscale", boscc_type="BOSCC Type",
+                                variable="Predictor", cluster_labels = "Cluster",
+                                group_diff_test="Overall Test P-value",
+                                pairwise_diff_test="Pairwise Test P-value",
+                                pairwise_effect_size="Pairwise Cohen's D")) %>%
+  merge_v(j=1:3) %>%
+  valign(valign = "top") %>%
+  hline() %>%
+  #bg(j=6, i=sig_pairwise_indices, bg="blue") %>%
+  #color(j=6, i=sig_pairwise_indices, color="white") %>%
+  bold(j=6, i=sig_pairwise_indices) %>%
+  autofit() %>%
+  add_footer_row(values = "Overall Test provides uncorrected p-values for Mann Whitney test for any median differences between clusters\nPairwise Test provides FDR-corrected p-values for pairwise tests for any median differences.\nSignificant pairwise differences highlighted in blue.\nPairwise Cohen's D provides Cohen's D effect sizes for mean differences between pairs. \nOnly results with significant overall tests provided for brevity.", colwidths = 7) %>%
+  fix_border_issues() %>%
+  save_as_image("plots_tables/pairwise_sig_tests.png")
+
+# Do same for 4 panel scatterplot
+ggplot(data=df_all_clust_fornaming_with_ints_plot,
+       mapping=aes(x=normal_traj_est, y=int_est,
+                   color=cluster_labels)) +
+  facet_grid(boscc_subscale~boscc_type, scales="free") +
+  geom_point(size=3)+
+  theme_bw()+
+  xlab("Estimated Trajectory: Normalized")+
+  ylab("Estimated Intercept")+
+  # labs(title="Scatterplot of estimated intercepts by normalized age-trajectory\nfor each BOSCC score type cluster.\n* indicates <0.05, ** < 0.01, *** <0.001 based on Mann-Whitney test of group differences in median.",
+  #      color="Cluster (RRB; SC)")+
+  labs(title="", color="Cluster (RRB; SC)")+
+  geom_text(data=aov_fits_ftest_df,
+            aes(0, Inf, 
+                label =
+                  ifelse(0.01<=signif_diff_int_est&signif_diff_int_est<0.05,"*",
+                          ifelse(0.001<=signif_diff_int_est&signif_diff_int_est<0.01,
+                                      "**",
+                                ifelse(signif_diff_int_est&signif_diff_int_est<0.001,
+                                             "***",
+                                             "")))), vjust = 1,
+            color="black", size=8)+ 
+  scale_color_manual(values=c("#009E73", "#E69F00", "#56B4E9",
+                              "#009E73", "#E69F00", "#56B4E9"))+
+  theme(text = element_text(size=20))
+ggsave("plots_tables/scatterplot_results_test_int.jpg",
+       scale=2.5, limitsize = FALSE)
+```
+
+### Examine clusters
+## Examine overlap
+```{r cluster_freq_table, results='asis'}
+# First, convert to wide form
+# Also want to add time in intervention as "explanatory variable"
+Full_Long_agerange <-
+  Full_Long %>% 
+    select(INIT, age) %>%
+    group_by(INIT) %>%
+    summarise(time_in_treat = max(age)-min(age))
+
+df_all_clust_fornaming_with_ints_plot_wide <- 
+  inner_join(df_all_clust_fornaming_with_ints_plot, 
+             list(age_init_grid, Full_Long_iq_all_impute, df_all_clust_plot) %>%
+                Reduce(function(x,y)left_join(x,y), .) %>%
+                select(INIT, MRVIQ, MRNVIQ, VABCST, MELTSC, MRLTSC, 
+                       boscc_type, boscc_subscale,
+                       cluster, cluster_labels),
+             by=c("INIT","boscc_type", "boscc_subscale",
+                  "cluster","cluster_labels")) %>%
+  inner_join(Full_Long_agerange) %>%
+  select(-c("mean_traj", "cluster_size", "sd_traj", "cluster")) %>%
+  pivot_wider(id_cols = c(INIT, boscc_subscale, 
+                          MRVIQ, MRNVIQ, VABCST, MELTSC, MRLTSC, time_in_treat),
+              names_from = c(boscc_type),
+              values_from = c(cluster_labels, normal_traj_est, int_est)) %>%
+  plyr::rename(c("cluster_labels_ADOS BOSCC"="cluster_ADOS_BOSCC",
+                 "cluster_labels_Standard BOSCC"="cluster_Standard_BOSCC"))
+
+# Create flat freq tables
+overlap_base_table_props <- 
+  xtabs(formula=~cluster_ADOS_BOSCC+cluster_Standard_BOSCC+boscc_subscale,
+       data=df_all_clust_fornaming_with_ints_plot_wide)
+
+# Create data frame to format
+freq_and_props_table <- list()
+
+for(l in 1:dim(overlap_base_table_props)[3]){
+  freq_table <- overlap_base_table_props[,,l]
+  prop_table <- prop.table(overlap_base_table_props, margin=3)[,,l]
+  
+  freq_and_props <- 
+    matrix(paste0(freq_table, " (", round(prop_table,2), ")"),
+           dim(freq_table)[1], dim(freq_table)[2])
+  rownames(freq_and_props) <- rownames(freq_table)
+  colnames(freq_and_props) <- colnames(freq_table)
+  
+  indices_save <-
+    if(dimnames(overlap_base_table_props)[[3]][l]=="RRB"){
+      1:3
+    }else{
+      4:6
+    }
+  
+  freq_and_props_table[[l]] <- as.table(freq_and_props[indices_save,indices_save])
+  names(dimnames(freq_and_props_table[[l]])) <- 
+    gsub(pattern="cluster_", replacement="",
+                                   x=names(dimnames(freq_table)))
+
+  names(freq_and_props_table)[l] <- 
+    dimnames(overlap_base_table_props)[[3]][l]
+}
+
+# Format
+rrb_table <-
+  ggplot(as.data.frame(freq_and_props_table$RRB) %>% 
+           mutate(freq_copy = gsub("\\)", "", gsub(" \\(", "_", Freq))) %>%
+           separate(col="freq_copy", into=c(NA, "prop_v0"), sep="_") %>%
+           mutate(prop = as.numeric(gsub("_", "", prop_v0))))+
+    geom_tile(mapping=aes(x=ADOS_BOSCC, y=Standard_BOSCC, fill=prop), color = "white")+
+    geom_text(mapping=aes(x=ADOS_BOSCC, y=Standard_BOSCC, label=Freq), size=7.5, family="Times New Roman")+
+    labs(x="ADOS BOSCC", y="Standard\nBOSCC", title = "RRB")+
+    scale_x_discrete(limits=rev(levels(as.data.frame(freq_and_props_table$RRB)$ADOS_BOSCC)))+
+    scale_fill_gradient(low="white", high="#0080FF", name="Proportion", limit=c(0,0.3))+
+    theme_minimal()+
+    theme(panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text = element_text(size=25),
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none")
+
+sc_table <-
+  ggplot(as.data.frame(freq_and_props_table$SC) %>% 
+           mutate(freq_copy = gsub("\\)", "", gsub(" \\(", "_", Freq))) %>%
+           separate(col="freq_copy", into=c(NA, "prop_v0"), sep="_") %>%
+           mutate(prop = as.numeric(gsub("_", "", prop_v0))))+
+    geom_tile(mapping=aes(x=ADOS_BOSCC, y=Standard_BOSCC, fill=prop), color = "white")+
+    geom_text(mapping=aes(x=ADOS_BOSCC, y=Standard_BOSCC, label=Freq), size=7.5, family="Times New Roman")+
+    labs(x="",y="Standard\nBOSCC", title = "SC")+
+    scale_x_discrete(limits=rev(levels(as.data.frame(freq_and_props_table$SC)$ADOS_BOSCC)))+
+    scale_fill_gradient(low="white", high="#0080FF", name="Proportion", limit=c(0,0.3))+
+    theme_minimal()+
+    theme(panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      text = element_text(size=25),
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none")
+
+ggarrange(plotlist=list(sc_table, rrb_table), ncol=1)
+ggsave(filename = "plots_tables/freq_table_clusters.png", height=6.32, width=7.45)
+
+# Also calculate Cohen's Kappa as a measure of consistency
+# RRB
+cohen.kappa(x=overlap_base_table_props[1:3,1:3,1])
+# SC
+cohen.kappa(x=overlap_base_table_props[4:6,4:6,2])
+
+```
+
+```{r cluster_overlap, include=FALSE, results='asis'}
+# See what variables predict overlap
+df_all_clust_fornaming_with_ints_plot_wide <- 
+  df_all_clust_fornaming_with_ints_plot_wide %>%
+  mutate(ados_stand_clust_pair = paste0(cluster_ADOS_BOSCC,
+                                        ", ", cluster_Standard_BOSCC),
+         boscc_clust_overlap = factor(ifelse(cluster_ADOS_BOSCC==cluster_Standard_BOSCC,
+                                      "overlap", "differ")))
+
+# Merge in other variables of interest at "baseline", i.e. 1st time pt
+# Interested in: VIQ, NVIQ, vineland scores, MSEL scores, time in treatment
+# First, use logistic regression with overlap variable
+# Again, none of these used to cluster => bias not induced
+
+log_reg_fit <- list()
+for(l in 
+    1:length(unique(df_all_clust_fornaming_with_ints_plot_wide$boscc_subscale))){
+  log_reg_fit[[l]] <- list()
+  
+  log_reg_fit[[l]][["fit_obj"]] <- 
+    glm(data=df_all_clust_fornaming_with_ints_plot_wide,
+        formula = 
+          boscc_clust_overlap~MRVIQ+MRNVIQ+VABCST+MELTSC+MRLTSC+time_in_treat,
+        subset = df_all_clust_fornaming_with_ints_plot_wide$boscc_subscale==
+          unique(df_all_clust_fornaming_with_ints_plot_wide$boscc_subscale)[l],
+        family=binomial())
+  
+  log_reg_fit[[l]][["est_results"]] <- 
+    data.frame(tidy(log_reg_fit[[l]][["fit_obj"]]),
+               "boscc_subscale"=
+                 unique(df_all_clust_fornaming_with_ints_plot_wide$boscc_subscale)[l])
+}
+
+for(l in 1:length(log_reg_fit)){
+  if(l==1){
+    log_reg_fit_allresults <- 
+    log_reg_fit[[l]][["est_results"]]
+  }else{
+    log_reg_fit_allresults <- rbind(log_reg_fit_allresults,
+                                    log_reg_fit[[l]][["est_results"]])
+  }
+}
+
+kable(log_reg_fit_allresults %>% select(boscc_subscale, everything()), 
+      digits=3) %>%
+  kable_styling() %>%
+  collapse_rows(columns = 1, valign = "top")
+
+# None are significant, likely due to differences within overlap/differ
+# Look at boxplots
+ggplot(data=df_all_clust_fornaming_with_ints_plot_wide %>%
+         pivot_longer(cols=c("MRVIQ", "MRNVIQ", "VABCST", "MELTSC", 
+                             "MRLTSC", "time_in_treat"),
+                      names_to="explantory_vars",
+                      values_to="vars_value"),
+       mapping=aes(x=ados_stand_clust_pair, y=vars_value)) +
+  geom_boxplot() +
+  facet_grid(explantory_vars~boscc_subscale, scales="free") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=40, hjust=1))
+
+# Need to shrink these groups down somehow.  Maybe do "gaps" of 0,1,2?
+ggplot(data=df_all_clust_fornaming_with_ints_plot_wide %>%
+         pivot_longer(cols=c("MRVIQ", "MRNVIQ", "VABCST", "MELTSC", 
+                             "MRLTSC", "time_in_treat"),
+                      names_to="explantory_vars",
+                      values_to="vars_value"),
+       mapping=aes(x=boscc_clust_overlap, y=vars_value, 
+                   fill=boscc_clust_overlap)) +
+  geom_boxplot() +
+  facet_grid(explantory_vars~boscc_subscale, scales="free") +
+  theme_bw()
+
+ggplot(data=df_all_clust_fornaming_with_ints_plot_wide %>%
+         mutate(boscc_clust_overlap_v2 = 
+                  ifelse(ados_stand_clust_pair=="Improving, Improving",
+                         "improve_all",
+                         ifelse(ados_stand_clust_pair=="Worsening, Worsening",
+                                "worsen_all",
+                                "differ"))) %>%
+         pivot_longer(cols=c("MRVIQ", "MRNVIQ", "VABCST", "MELTSC", 
+                             "MRLTSC", "time_in_treat"),
+                      names_to="explantory_vars",
+                      values_to="vars_value"),
+       mapping=aes(x=boscc_clust_overlap_v2, y=vars_value, 
+                   fill=boscc_clust_overlap_v2)) +
+  geom_boxplot() +
+  facet_grid(explantory_vars~boscc_subscale, scales="free") +
+  theme_bw()
+
+# Normalize these 5 variables?  Scales are so different, hard to visualize
+# distributions together
+```
+
+### Cutoff scores for clusters
+Use non-normalized trajectories (change over one month)
+```{r cutoff_score_analysis}
+df_all_clust_fornaming_og_traj <- 
+  inner_join(df_all_clust %>%
+  select(c("INIT", 
+           names(df_all_clust)[grepl("clust", names(df_all_clust))])) %>%
+  distinct() %>%
+  pivot_longer(cols=names(df_all_clust)[grepl("clust", names(df_all_clust))],
+                 names_to="boscc_type",
+                 values_to="cluster") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot_clus") %>%
+    select(-trash),
+  df_all_clust %>%
+  select(c("INIT",
+           names(df_all_clust)[grepl("traj_values", names(df_all_clust))])) %>%
+  distinct() %>%
+  pivot_longer(cols=names(df_all_clust)[grepl("traj_values", names(df_all_clust))],
+                 names_to="boscc_type",
+                 values_to="og_traj_est") %>%
+    separate(col="boscc_type", into=c("boscc_type","trash"), 
+             sep="AvgTot_est_traj") %>%
+    select(-trash)
+  )
+
+df_all_clust_alltraj <- 
+  inner_join(df_all_clust_fornaming, df_all_clust_fornaming_og_traj) %>%
+  mutate(boscc_subscale=ifelse(grepl("RRB", boscc_type),"RRB","SC"),
+         boscc_type=ifelse(grepl("AB_Code2", boscc_type), "ADOS BOSCC",
+                                 "Standard BOSCC")) %>%
+  inner_join(cluster_means_byboscc_plot)
+
+# Look at summ stats for og est traj
+og_traj_summ_stats <- 
+  df_all_clust_alltraj %>%
+  group_by(boscc_subscale, boscc_type, cluster_labels) %>%
+  summarise(median_og_traj = quantile(og_traj_est*6, 
+                                      probs=0.5, na.rm = TRUE),
+            first_quart_og_traj = quantile(og_traj_est*6, 
+                                           probs=0.25, na.rm = TRUE),
+            third_quart_og_traj = quantile(og_traj_est*6, 
+                                           probs=0.75, na.rm = TRUE),
+            mean_og_traj = mean(og_traj_est*6, na.rm = TRUE),
+            sd_og_traj = sd(og_traj_est*6, na.rm = TRUE)) %>%
+  mutate(iqr = third_quart_og_traj-first_quart_og_traj) %>%
+  ungroup() %>%
+  select(boscc_subscale, boscc_type, cluster_labels,
+         median_og_traj, iqr, mean_og_traj, sd_og_traj)
+
+kable(og_traj_summ_stats, digits = 3) %>%
+  kable_styling() %>%
+  collapse_rows(columns = 1:2, valign = "top")
+
+clust_summ_stats_table <-
+  flextable(og_traj_summ_stats %>% arrange(desc(boscc_subscale))) %>%
+    colformat_double(digits = 2) %>%
+    set_header_labels(boscc_type="BOSCC Type",
+                      boscc_subscale="BOSCC Subscale",
+                      cluster_labels="Cluster",
+                      median_og_traj="Median Change",
+                      iqr="IQR",
+                      mean_og_traj="Mean Change",
+                      sd_og_traj="SD Change") %>%
+    autofit() %>%
+    merge_v(j=1:2) %>%
+    valign(j=1:2, valign="top") %>%
+    hline(i=seq(from=3, to=dim(og_traj_summ_stats)[1], by=3),
+    border=fp_border(color="black", width=1.5)) %>%
+    fix_border_issues()
+
+save_as_docx(clust_summ_stats_table, path = "plots_tables/clust_summ_stats_table_6months.docx")
+save_as_image(clust_summ_stats_table, path = "plots_tables/clust_summ_stats_table_6months.png")
+
+rrb_boxplot_change <- 
+  ggplot(df_all_clust_alltraj %>% filter(boscc_subscale=="RRB"), 
+       mapping=aes(x=cluster_labels, y=6*og_traj_est,
+                   fill=cluster_labels)) +
+    facet_wrap(~boscc_type) +
+    geom_boxplot()+ 
+    ylab("Raw Estimated Change\n(6 Months)")+
+    xlab("Cluster")+
+    labs(title="RRB",
+         fill="Cluster (RRB; SC)")+
+    scale_fill_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    theme_bw()+
+    theme(text = element_text(size=27.5),
+          legend.position = "none",
+          plot.title = element_text(hjust = 0.5))
+
+sc_boxplot_change <- 
+  ggplot(df_all_clust_alltraj %>% filter(boscc_subscale=="SC"), 
+       mapping=aes(x=cluster_labels, y=6*og_traj_est,
+                   fill=cluster_labels)) +
+    facet_wrap(~boscc_type) +
+    geom_boxplot()+ 
+    ylab("Raw Estimated Change\n(6 Months)")+
+    xlab("")+
+    labs(title="SC",
+         fill="Cluster (RRB; SC)")+
+    scale_fill_manual(values=c("#009E73", "#E69F00", "#56B4E9"))+
+    theme_bw()+
+    theme(text = element_text(size=27.5),
+          legend.position = "none",
+          plot.title = element_text(hjust = 0.5))
+
+ggarrange(plotlist = list(sc_boxplot_change, rrb_boxplot_change), ncol=1)
+ggsave("plots_tables/raw_traj_clusters_rescaled.jpg", 
+       scale=2,
+       limitsize = FALSE)
+```
+# Summary Statistics
+
+````{r summ_stats}
+# AGE 
+Full_Long%>%summarise(mean_age=mean(age, na.rm = TRUE),
+                      sd_age=sd(age, na.rm = TRUE))
+
+# Time in treatment
+Full_Long_agerange%>%summarise(mean_time=mean(time_in_treat, na.rm = TRUE),
+                      sd_time=sd(time_in_treat, na.rm = TRUE))
+
+# Gender
+ftable(Full_Long %>% select(INIT, Gender) %>% unique() %>% select(Gender))
+
+# Race
+Full_Long$race
+
+# Ethnicity
+````
+
+# Association between BOSCC and time in treatment
+
+```{r}
+# Convert from wide to long for paneled figure
+## First compute time in treatment, change in BOSCC scores
+Full_Long_boscc_age <- Full_Long %>% select(INIT, age, Code2SCAvgTot, AB_Code2SCAvgTot,
+                                             Code2RRBAvgTot, AB_Code2RRBAvgTot) %>%
+  group_by(INIT) %>%
+  summarise(change_sc_boscc = last(Code2SCAvgTot)-first(Code2SCAvgTot),
+            change_sc_ados = last(AB_Code2SCAvgTot)-first(AB_Code2SCAvgTot),
+            change_rrb_boscc = last(Code2RRBAvgTot)-first(Code2RRBAvgTot),
+            change_rrb_ados = last(AB_Code2RRBAvgTot)-first(AB_Code2RRBAvgTot)) %>%
+  merge(Full_Long %>% 
+    select(INIT, age) %>%
+    group_by(INIT) %>%
+    summarise(time_in_treat = max(age)-min(age)), all.x=TRUE)
+
+## Second plot and compute correlations, need to convert to long now
+Full_Long_boscc_age_long <- pivot_longer(Full_Long_boscc_age,
+                                         cols=c("change_sc_boscc", "change_sc_ados",
+                                                "change_rrb_boscc", "change_rrb_ados"),
+                                         names_to = "change_type",
+                                         values_to = "change_amount")
+
+ggplot(data=Full_Long_boscc_age_long, mapping=aes(x=time_in_treat, y=change_amount))+
+  geom_point()+
+  geom_smooth(method="lm", se=FALSE)+
+  stat_cor(size = 4)+
+  facet_wrap(~change_type, labeller = as_labeller(c(change_rrb_ados="ADOS BOSCC: RRB",
+                                                    change_rrb_boscc="Standard BOSCC: RRB",
+                                                    change_sc_ados="ADOS BOSCC: SC",
+                                                    change_sc_boscc="Standard BOSCC: SC")))+
+  labs(x="Time in treatment (months)", y="BOSCC score change")+
+  theme_bw()+
+  theme(text=element_text(size=20))
+ggsave("plots_tables/corr_boscc_time_in_treat.png", scale=1.5)
+```
